@@ -1,0 +1,44 @@
+{
+  "$schema": "https://firebase.google.com/docs/firestore/blueprint-schema.json",
+  "entities": {
+    "users": {
+      "type": "collection",
+      "description": "User accounts with authentication details and meta",
+      "fields": {
+        "id": { "type": "string", "description": "Unique user account ID" },
+        "username": { "type": "string", "description": "Unique username" },
+        "name": { "type": "string", "description": "User display name" },
+        "password": { "type": "string", "description": "Account password" },
+        "role": { "type": "string", "description": "User role: admin or user" },
+        "avatarColor": { "type": "string", "description": "User avatar color" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" },
+        "lastSyncedAt": { "type": "string", "description": "ISO timestamp of last cloud sync" }
+      }
+    },
+    "userData": {
+      "type": "collection",
+      "description": "User data documents containing planners, checklist, diaries, financials, routines, and preferences keyed by userId",
+      "fields": {
+        "userId": { "type": "string", "description": "Account user ID" },
+        "planner": { "type": "array", "description": "Planner items array" },
+        "checklist": { "type": "array", "description": "Checklist items array" },
+        "diaries": { "type": "array", "description": "Diaries array" },
+        "financials": { "type": "array", "description": "Financial items array" },
+        "routines": { "type": "array", "description": "Routines array" },
+        "categories": { "type": "array", "description": "Categories array" },
+        "themeSettings": { "type": "object", "description": "Theme and preference settings" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      }
+    },
+    "systemBackups": {
+      "type": "collection",
+      "description": "Admin full system snapshots for disaster recovery",
+      "fields": {
+        "version": { "type": "string", "description": "Backup schema version" },
+        "exportedAt": { "type": "string", "description": "Export timestamp" },
+        "users": { "type": "array", "description": "Snapshot of users" },
+        "userDatabases": { "type": "object", "description": "Snapshot of all user data maps" }
+      }
+    }
+  }
+}

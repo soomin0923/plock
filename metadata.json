@@ -1,0 +1,8 @@
+{
+  "name": "Remix 플랜\u0026로그 - Planner \u0026 Diary",
+  "description": "월별/일별 플래너, 루틴 및 체크리스트, 감정 일기, 가계부, 갤러리 이미지 커스텀 스티커 꾸미기, 클라우드 및 구글 캘린더 동기화를 제공하는 플래너 다이어리",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

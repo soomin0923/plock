@@ -1,0 +1,51 @@
+{
+  "plannerItems": [],
+  "routines": [],
+  "checklist": [],
+  "diaries": [],
+  "financials": [],
+  "userStickers": [],
+  "categories": [
+    {
+      "id": "work",
+      "name": "업무/직장",
+      "color": "#1A1A1A"
+    },
+    {
+      "id": "personal",
+      "name": "개인일정",
+      "color": "#C1876B"
+    },
+    {
+      "id": "health",
+      "name": "운동/건강",
+      "color": "#849283"
+    },
+    {
+      "id": "study",
+      "name": "자기계발",
+      "color": "#7A6B58"
+    },
+    {
+      "id": "finance",
+      "name": "가계/금융",
+      "color": "#B25D3B"
+    },
+    {
+      "id": "travel",
+      "name": "여행/외출",
+      "color": "#3E5240"
+    },
+    {
+      "id": "routine",
+      "name": "루틴/반복",
+      "color": "#2A2A2A"
+    },
+    {
+      "id": "other",
+      "name": "기타",
+      "color": "#6B7280"
+    }
+  ],
+  "lastSyncedAt": "2026-08-11T10:33:00.000Z"
+}
