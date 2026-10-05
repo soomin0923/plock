@@ -249,3 +249,18 @@ button:disabled {
   box-shadow: 0 2px 6px rgb(0 0 0 / 0.2);
   touch-action: none;
 }
+
+/* LP player record */
+@keyframes vinyl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.vinyl-spin {
+  animation: vinyl-spin 3.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vinyl-spin {
+    animation-duration: 12s;
+  }
+}

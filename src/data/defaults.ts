@@ -107,5 +107,8 @@ export const THEME_COLORS = [
   { name: '라벤더', color: '#7C6BB5' },
   { name: '로즈', color: '#C9607E' },
   { name: '오션', color: '#3B7BB0' },
+  { name: '미스티블루', color: '#6A8CC0' },
+  { name: '민트', color: '#3A9886' },
+  { name: '네이비', color: '#34406B' },
   { name: '먹', color: '#3A3A3A' },
 ];

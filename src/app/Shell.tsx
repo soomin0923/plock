@@ -1,14 +1,17 @@
 import React from 'react';
-import { BookHeart, CalendarDays, Cloud, CloudOff, Home, Loader2, Settings, TriangleAlert, Wallet, HardDrive } from 'lucide-react';
+import { BookHeart, CalendarDays, Cloud, CloudOff, Home, Inbox, Loader2, Settings, TriangleAlert, Wallet, HardDrive } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { useData } from '../data/DataProvider';
 import type { SyncState } from '../data/repo';
 import { cx } from '../lib/util';
+import { useDeviceSettings } from '../lib/deviceSettings';
+import { FloatingMusic, SidebarMusic } from '../features/music/MusicWidgets';
 import { useRouter, type Tab } from './router';
 
-const NAV: { id: Tab; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
+export const NAV: { id: Tab; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }> }[] = [
   { id: 'today', label: '오늘', icon: Home },
   { id: 'planner', label: '플래너', icon: CalendarDays },
+  { id: 'dump', label: '쏟아내기', icon: Inbox },
   { id: 'diary', label: '다이어리', icon: BookHeart },
   { id: 'ledger', label: '가계부', icon: Wallet },
   { id: 'settings', label: '설정', icon: Settings },
@@ -58,10 +61,15 @@ function Avatar({ size = 32 }: { size?: number }) {
   );
 }
 
+/** Tabs that can be hidden in 설정 > 화면 (오늘 and 설정 always stay). */
+export const HIDEABLE_TABS: Tab[] = ['planner', 'dump', 'diary', 'ledger'];
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const { tab, go } = useRouter();
   const { user } = useData();
+  const { hiddenTabs } = useDeviceSettings();
   const current = NAV.find((n) => n.id === tab)!;
+  const nav = NAV.filter((n) => n.id === tab || !HIDEABLE_TABS.includes(n.id) || !hiddenTabs.includes(n.id));
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -71,8 +79,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Logo size={34} />
           <span className="text-xl font-extrabold tracking-tight">Plock</span>
         </button>
-        <nav className="flex flex-1 flex-col gap-1">
-          {NAV.map((n) => {
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+          {nav.map((n) => {
             const active = n.id === tab;
             return (
               <button
@@ -90,6 +98,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+        <SidebarMusic />
         <div className="space-y-2 border-t border-line pt-3">
           <SyncBadge />
           <button onClick={() => go('settings', { type: 'settings-section', section: 'account' })} className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-hover">
@@ -120,22 +129,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {/* Mobile bottom tabs */}
         <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur-md lg:hidden">
           <div className="mx-auto flex max-w-lg">
-            {NAV.map((n) => {
+            {nav.map((n) => {
               const active = n.id === tab;
               return (
                 <button
                   key={n.id}
                   onClick={() => go(n.id)}
                   aria-current={active ? 'page' : undefined}
-                  className={cx('flex flex-1 flex-col items-center gap-0.5 pb-2 pt-2.5 text-[11px] font-semibold', active ? 'text-primary' : 'text-muted')}
+                  className={cx('flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-2 pt-2.5 text-[11px] font-semibold', active ? 'text-primary' : 'text-muted')}
                 >
                   <n.icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.4 : 1.9} />
-                  {n.label}
+                  <span className="max-w-full truncate px-0.5">{n.label}</span>
                 </button>
               );
             })}
           </div>
         </nav>
+        <FloatingMusic />
       </div>
     </div>
   );

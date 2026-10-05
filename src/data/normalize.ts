@@ -6,6 +6,8 @@ import type {
   Habit,
   LedgerCategory,
   LedgerEntry,
+  MusicTrack,
+  Note,
   PlannerEvent,
   Prefs,
   SqlSetup,
@@ -137,14 +139,35 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
     order: num(r.order),
   }),
 
+  notes: (r): Note => ({
+    ...base(r),
+    text: str(r.text),
+    memo: optStr(r.memo),
+    photos: strArr(r.photos),
+    link: optStr(r.link),
+    categoryId: optStr(r.categoryId),
+    dueDate: optDate(r.dueDate),
+    starred: bool(r.starred),
+    done: bool(r.done),
+  }),
+
   prefs: (r): Prefs => ({
     ...base(r),
     id: 'main',
     monthlyBudget: typeof r.monthlyBudget === 'number' && r.monthlyBudget > 0 ? r.monthlyBudget : undefined,
     weekStartsOn: r.weekStartsOn === 1 ? 1 : 0,
     sql: normalizeSqlSetup(r.sql),
+    music: normalizeMusic(r.music),
   }),
 };
+
+function normalizeMusic(v: unknown): MusicTrack[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const list = (v as Raw[])
+    .filter((t) => t && typeof t === 'object' && (typeof t.videoId === 'string' || typeof t.listId === 'string'))
+    .map((t) => ({ id: str(t.id) || Math.random().toString(36).slice(2), title: str(t.title), videoId: optStr(t.videoId), listId: optStr(t.listId) }));
+  return list.length ? list : undefined;
+}
 
 function normalizeSqlSetup(v: unknown): SqlSetup | undefined {
   if (!v || typeof v !== 'object') return undefined;

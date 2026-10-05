@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, Bot, Database, Download, ExternalLink, Eye, EyeOff, HardDrive, LogOut, Palette, Smartphone, Trash2, Upload, User, History } from 'lucide-react';
+import { Bell, Bot, Database, Disc3, Download, ExternalLink, Eye, EyeOff, HardDrive, LogOut, Palette, Smartphone, Trash2, Upload, User, History } from 'lucide-react';
 import { useData } from '../../data/DataProvider';
 import { useIntent } from '../../app/router';
 import { useOpenAuth } from '../../app/authSheet';
-import { PageHeader } from '../../app/Shell';
+import { HIDEABLE_TABS, NAV, PageHeader } from '../../app/Shell';
+import { useMusic } from '../music/MusicProvider';
 import { Button, Card, Field, Segmented, Select, Spinner, TextInput, Toggle, useConfirm } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { setDeviceSettings, useDeviceSettings } from '../../lib/deviceSettings';
 import { pickDefaultModel, testGeminiKey, type GeminiModel } from '../../lib/gemini';
-import { requestNotificationPermission } from '../../lib/reminders';
+import { requestNotificationPermission, testReminder } from '../../lib/reminders';
 import { THEME_COLORS } from '../../data/defaults';
 import { convertLegacy, countRecords, findLegacySources, legacyImportedKeys, markLegacyImported, parseBackup, type LegacySource } from '../../data/bundle';
 import { cx, downloadBlob, readFileAsText } from '../../lib/util';
@@ -43,6 +44,7 @@ export function SettingsView() {
           <AccountSection />
           <AiSection />
           <AppearanceSection />
+          <MusicSection />
         </div>
         <div className="space-y-4">
           <DataSection />
@@ -249,6 +251,45 @@ function AppearanceSection() {
           ]}
         />
       </div>
+      <TabVisibility />
+    </Section>
+  );
+}
+
+function TabVisibility() {
+  const { hiddenTabs } = useDeviceSettings();
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <p className="text-[15px] font-medium">탭 보이기</p>
+      <p className="mb-2 text-[13px] text-muted">안 쓰는 탭은 꺼 두세요. 기록은 지워지지 않고, 이 기기에만 적용돼요.</p>
+      <div className="divide-y divide-line">
+        {NAV.filter((n) => HIDEABLE_TABS.includes(n.id)).map((n) => (
+          <div key={n.id} className="py-1">
+            <Toggle
+              checked={!hiddenTabs.includes(n.id)}
+              onChange={(on) => setDeviceSettings({ hiddenTabs: on ? hiddenTabs.filter((t) => t !== n.id) : [...hiddenTabs, n.id] })}
+              label={
+                <span className="flex items-center gap-2">
+                  <n.icon className="h-4 w-4 text-primary" />
+                  {n.label}
+                </span>
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MusicSection() {
+  const m = useMusic();
+  return (
+    <Section id="music" icon={<Disc3 className="h-5 w-5" />} title="LP 플레이어" description="YouTube · YouTube Music 링크로 공부할 때 들을 음악을 올려 두세요. PC는 왼쪽 아래, 휴대폰은 오른쪽 아래 LP를 누르면 돼요.">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[15px]">{m.tracks.length ? `올린 판 ${m.tracks.length}개` : '아직 올린 판이 없어요'}</span>
+        <Button onClick={m.openSheet}>{m.tracks.length ? '판 바꾸기' : '판 올리기'}</Button>
+      </div>
     </Section>
   );
 }
@@ -290,6 +331,14 @@ function ReminderSection() {
                 ))}
               </Select>
             </div>
+          )}
+          {s.remindersEnabled && perm === 'granted' && (
+            <>
+              <Toggle checked={s.reminderSound} onChange={(on) => setDeviceSettings({ reminderSound: on })} label="알림 소리" description="알림과 함께 짧은 소리를 내요." />
+              <Button className="w-full" onClick={() => testReminder(s.reminderSound)}>
+                알림 테스트
+              </Button>
+            </>
           )}
         </div>
       )}

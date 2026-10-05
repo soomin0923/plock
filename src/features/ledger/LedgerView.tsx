@@ -9,6 +9,7 @@ import { MonthGrid, MonthNav } from '../../components/MonthGrid';
 import { QuickAdd } from '../../components/QuickAdd';
 import { AssetImage } from '../../components/AssetImage';
 import { useToast } from '../../components/Toast';
+import { getDeviceSettings } from '../../lib/deviceSettings';
 import { addMonths, diffDays, endOfMonth, formatKoreanDate, monthKey, today } from '../../lib/date';
 import { compactWon, cx, downloadBlob, won } from '../../lib/util';
 import { aiParseLedger, aiReadReceipt, hasGeminiKey } from '../../lib/gemini';
@@ -43,6 +44,7 @@ export function LedgerView() {
       setMonth(i.date);
       newEntry(i.date);
     }
+    if (i.type === 'ledger-text') onQuick(i.text, !!getDeviceSettings().geminiKey.trim());
   });
 
   const monthEntries = useMemo(() => entriesInMonth(data.ledger, month), [data.ledger, month]);

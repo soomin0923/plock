@@ -1,16 +1,17 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
-export type Tab = 'today' | 'planner' | 'diary' | 'ledger' | 'settings';
-export const TABS: Tab[] = ['today', 'planner', 'diary', 'ledger', 'settings'];
+export type Tab = 'today' | 'planner' | 'dump' | 'diary' | 'ledger' | 'settings';
+export const TABS: Tab[] = ['today', 'planner', 'dump', 'diary', 'ledger', 'settings'];
 
 /** One-shot instruction for the destination screen (e.g. "open the diary editor for this date"). */
 export type Intent =
   | { type: 'diary-write'; date: string }
   | { type: 'diary-open'; id: string }
   | { type: 'ledger-add'; date: string }
+  | { type: 'ledger-text'; text: string }
   | { type: 'planner-date'; date: string }
   | { type: 'planner-section'; section: 'calendar' | 'tasks' | 'habits' | 'sql' }
-  | { type: 'settings-section'; section: 'account' | 'ai' | 'data' | 'sql' };
+  | { type: 'settings-section'; section: 'account' | 'ai' | 'data' | 'sql' | 'look' | 'music' };
 
 interface RouterApi {
   tab: Tab;

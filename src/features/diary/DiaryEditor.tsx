@@ -19,11 +19,38 @@ export function blankDiary(date: string): DiaryEntry {
   return { id: newId('diary'), date, title: '', content: '', paper: 'plain', font: 'sans', photos: [], stickers: [], createdAt: now, updatedAt: now };
 }
 
+// Work in progress is mirrored to localStorage, so a closed tab or a crash never loses a diary.
+const DRAFT_KEY = 'plock_diary_draft';
+
+function readDraft(initial: DiaryEntry, isNew: boolean): DiaryEntry | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null') as { entry?: DiaryEntry; isNew?: boolean; at?: number } | null;
+    if (!d?.entry || !d.at) return null;
+    // Ignore drafts older than the saved diary (edited later, maybe on another device) or a week.
+    if (Date.now() - d.at > 7 * 86400_000 || (!isNew && new Date(initial.updatedAt).getTime() > d.at)) return null;
+    if (d.entry.id === initial.id || (isNew && d.isNew && d.entry.date === initial.date)) return { ...d.entry, id: initial.id };
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+const isBlank = (e: DiaryEntry) => !e.title.trim() && !e.content.trim() && !e.photos.length && !e.stickers.length;
+
 export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: DiaryEntry; isNew: boolean; onClose: () => void; onSaved?: (e: DiaryEntry) => void }) {
   const { data, upsert, saveImage, releaseImages } = useData();
   const toast = useToast();
   const confirm = useConfirm();
-  const [entry, setEntry] = useState<DiaryEntry>(initial);
+  const [restored] = useState(() => readDraft(initial, isNew));
+  const [entry, setEntry] = useState<DiaryEntry>(restored || initial);
   const [selected, setSelected] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [makerOpen, setMakerOpen] = useState(false);
@@ -35,6 +62,24 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
 
   const dirty = useMemo(() => JSON.stringify(entry) !== JSON.stringify(initial), [entry, initial]);
   const set = (patch: Partial<DiaryEntry>) => setEntry((e) => ({ ...e, ...patch }));
+
+  useEffect(() => {
+    if (restored) toast('작성 중이던 일기를 불러왔어요.', 'info');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep a local copy of unsaved work (debounced).
+  useEffect(() => {
+    if (!dirty) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ entry, isNew, at: Date.now() }));
+      } catch {
+        /* storage full — the beforeunload warning below still protects the user */
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [entry, dirty, isNew]);
 
   // Warn before the tab is closed with unsaved changes.
   useEffect(() => {
@@ -55,21 +100,27 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
     };
   }, []);
 
+  // Closing saves automatically; there is nothing to lose by pressing X or the back button.
   const requestClose = async (): Promise<boolean> => {
-    if (dirty && !(await confirm({ title: '저장하지 않고 나갈까요?', message: '작성 중인 내용이 사라져요.', confirmLabel: '나가기', danger: true }))) return false;
+    if (dirty && !isBlank(entry)) {
+      if (uploading > 0 && !(await confirm({ title: '사진을 올리는 중이에요', message: '지금 닫으면 올리는 중인 사진은 빠지고 나머지는 저장돼요.', confirmLabel: '저장하고 닫기' }))) return false;
+      save(true);
+      return true;
+    }
+    clearDraft();
     releaseImages(added.current, { col: 'diaries', id: initial.id, next: isNew ? undefined : initial });
     onClose();
     return true;
   };
   useBackToClose(true, requestClose);
 
-  const save = () => {
-    const isEmpty = !entry.title.trim() && !entry.content.trim() && !entry.photos.length && !entry.stickers.length;
-    if (isEmpty) return toast('내용을 조금이라도 적어 주세요.', 'info');
+  const save = (auto = false) => {
+    if (isBlank(entry)) return toast('내용을 조금이라도 적어 주세요.', 'info');
     const next = { ...entry, title: entry.title.trim() };
     upsert('diaries', next);
+    clearDraft();
     releaseImages([...collectAssetRefs(initial), ...added.current], { col: 'diaries', id: next.id, next });
-    toast(isNew ? '일기를 저장했어요.' : '일기를 수정했어요.');
+    toast(auto ? '일기를 자동 저장했어요.' : isNew ? '일기를 저장했어요.' : '일기를 수정했어요.');
     onSaved?.(next);
     onClose();
   };
@@ -158,7 +209,7 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
           />
           <div className="flex-1" />
           {uploading > 0 && <Spinner className="text-muted" />}
-          <Button variant="primary" onClick={save} disabled={uploading > 0} icon={<Check className="h-4 w-4" />}>
+          <Button variant="primary" onClick={() => save()} disabled={uploading > 0} icon={<Check className="h-4 w-4" />}>
             저장
           </Button>
         </div>

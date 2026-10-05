@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 // Settings that belong to this browser/device only (never uploaded):
-// theme color, the user's own Gemini API key, reminder preferences.
+// theme color, the user's own Gemini API key, reminder preferences, which tabs to show.
 
 export interface DeviceSettings {
   themeColor: string;
@@ -10,6 +10,10 @@ export interface DeviceSettings {
   geminiModel: string;
   remindersEnabled: boolean;
   reminderLead: number; // minutes before start
+  /** Play a short chime with each reminder (while Plock is open). */
+  reminderSound: boolean;
+  /** Tabs hidden from the navigation on this device. */
+  hiddenTabs: string[];
 }
 
 const KEY = 'plock_device_settings_v2';
@@ -20,6 +24,8 @@ const defaults: DeviceSettings = {
   geminiModel: '',
   remindersEnabled: false,
   reminderLead: 10,
+  reminderSound: true,
+  hiddenTabs: [],
 };
 
 function load(): DeviceSettings {

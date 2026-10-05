@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatMonth, monthGrid, monthKey, orderedWeekdays, today, WEEKDAYS_KR, parseYmd } from '../lib/date';
 import { cx } from '../lib/util';
+import { holidayName } from '../lib/holidays';
 import { IconButton } from './ui';
 
 export function MonthNav({ month, onPrev, onNext, onToday, right }: { month: string; onPrev: () => void; onNext: () => void; onToday?: () => void; right?: React.ReactNode }) {
@@ -39,7 +40,7 @@ export function MonthGrid({
   weekStartsOn = 0,
   renderCell,
   cellMinHeight = 'min-h-[64px] sm:min-h-[92px]',
-  holidays,
+  showHolidayNames = true,
 }: {
   month: string;
   selected?: string;
@@ -47,7 +48,7 @@ export function MonthGrid({
   weekStartsOn?: 0 | 1;
   renderCell?: (info: CellInfo) => React.ReactNode;
   cellMinHeight?: string;
-  holidays?: Set<string>;
+  showHolidayNames?: boolean;
 }) {
   const cells = monthGrid(month, weekStartsOn);
   const mk = monthKey(month);
@@ -65,6 +66,7 @@ export function MonthGrid({
         {cells.map((date) => {
           const info: CellInfo = { date, inMonth: monthKey(date) === mk, isToday: date === t, selected: date === selected };
           const wd = parseYmd(date).getDay();
+          const holiday = holidayName(date);
           return (
             <button
               key={date}
@@ -79,13 +81,20 @@ export function MonthGrid({
                 !info.inMonth && 'opacity-40',
               )}
             >
-              <span
-                className={cx(
-                  'mx-auto mb-0.5 flex h-6 w-6 items-center justify-center rounded-full text-[13px] font-semibold tabular sm:mx-0 sm:ml-0.5',
-                  info.isToday ? 'bg-primary text-white' : wd === 0 || holidays?.has(date) ? 'text-expense' : wd === 6 ? 'text-sky-600' : 'text-ink',
+              <span className="mb-0.5 flex min-w-0 flex-col items-center sm:flex-row sm:gap-1">
+                <span
+                  className={cx(
+                    'flex h-6 w-6 flex-none items-center justify-center rounded-full text-[13px] font-semibold tabular sm:ml-0.5',
+                    info.isToday ? 'bg-primary text-white' : wd === 0 || holiday ? 'text-expense' : wd === 6 ? 'text-sky-600' : 'text-ink',
+                  )}
+                >
+                  {parseYmd(date).getDate()}
+                </span>
+                {holiday && showHolidayNames && (
+                  <span className="max-w-full truncate text-[9px] font-medium leading-3 text-expense/90 sm:text-[11px]" title={holiday}>
+                    {holiday}
+                  </span>
                 )}
-              >
-                {parseYmd(date).getDate()}
               </span>
               {renderCell?.(info)}
             </button>

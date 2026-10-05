@@ -5,19 +5,16 @@ import config from '../../firebase-applet-config.json';
 // The Firebase web config is public by design (it identifies the project, it does not grant access).
 // Access control lives in firestore.rules: each signed-in user can only touch accounts/{their uid}.
 
-const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-const servedByFirebaseHosting = hostname.endsWith('.web.app') || hostname.endsWith('.firebaseapp.com');
-
 const options: FirebaseOptions = {
   apiKey: config.apiKey,
   appId: config.appId,
   projectId: config.projectId,
   storageBucket: config.storageBucket,
   messagingSenderId: config.messagingSenderId,
-  // When the app is served from Firebase Hosting, use the same domain for the auth handler.
-  // Otherwise Google sign-in via redirect breaks in browsers that partition third-party storage
-  // (Safari, Chrome on iOS, Firefox) because *.web.app and *.firebaseapp.com are different sites.
-  authDomain: servedByFirebaseHosting ? hostname : config.authDomain,
+  // Keep the default <project>.firebaseapp.com handler: it is the only redirect URI registered on the
+  // project's auto-created Google OAuth client. Using *.web.app here fails with redirect_uri_mismatch.
+  // Google sign-in uses a popup (see lib/auth.ts), which works across the two domains in all browsers.
+  authDomain: config.authDomain,
 };
 
 export const firebaseApp = initializeApp(options);

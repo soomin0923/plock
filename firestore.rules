@@ -13,7 +13,7 @@ service cloud.firestore {
 
     function knownCollection(col) {
       return col in ['categories', 'events', 'tasks', 'habits', 'diaries', 'stickers',
-                     'ledger', 'ledgerCategories', 'prefs', 'assets', 'assetIndex'];
+                     'ledger', 'ledgerCategories', 'notes', 'prefs', 'assets', 'assetIndex'];
     }
 
     match /accounts/{uid}/{col}/{docId} {

@@ -114,6 +114,26 @@ export interface LedgerCategory extends BaseRecord {
   order: number;
 }
 
+// 쏟아내기: quick capture. One line first; memo, photos, link, category and deadline are optional.
+export interface Note extends BaseRecord {
+  text: string;
+  memo?: string;
+  photos: string[]; // asset refs
+  link?: string;
+  categoryId?: string;
+  dueDate?: string; // YYYY-MM-DD
+  starred: boolean;
+  done: boolean;
+}
+
+/** A YouTube / YouTube Music link on the LP player. */
+export interface MusicTrack {
+  id: string;
+  title: string;
+  videoId?: string;
+  listId?: string;
+}
+
 // ---- User-designed SQL layer (설정 > 일정 DB).
 // The user writes the CREATE TABLE statements and the queries; the app only fills the tables
 // with the user's plan data according to the column mapping, and runs the saved queries.
@@ -146,6 +166,7 @@ export interface Prefs extends BaseRecord {
   monthlyBudget?: number;
   weekStartsOn: 0 | 1;
   sql?: SqlSetup;
+  music?: MusicTrack[];
 }
 
 export interface CollectionMap {
@@ -157,6 +178,7 @@ export interface CollectionMap {
   stickers: StickerAsset;
   ledger: LedgerEntry;
   ledgerCategories: LedgerCategory;
+  notes: Note;
   prefs: Prefs;
 }
 
@@ -171,5 +193,6 @@ export const COLLECTIONS: CollectionName[] = [
   'stickers',
   'ledger',
   'ledgerCategories',
+  'notes',
   'prefs',
 ];

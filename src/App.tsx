@@ -10,6 +10,9 @@ import { TodayView } from './features/today/TodayView';
 import { PlannerView } from './features/planner/PlannerView';
 import { DiaryView } from './features/diary/DiaryView';
 import { LedgerView } from './features/ledger/LedgerView';
+import { DumpView } from './features/dump/DumpView';
+import { MusicProvider } from './features/music/MusicProvider';
+import { MusicSheet } from './features/music/MusicWidgets';
 import { SettingsView } from './features/settings/SettingsView';
 import { useDeviceSettings } from './lib/deviceSettings';
 import { hexToRgba } from './lib/util';
@@ -97,14 +100,18 @@ function Screens() {
   if (fatalError) return <Splash message={fatalError} />;
   if (!authReady || !loaded) return <Splash />;
   return (
-    <Shell>
-      {tab === 'today' && <TodayView />}
-      {tab === 'planner' && <PlannerView />}
-      {tab === 'diary' && <DiaryView />}
-      {tab === 'ledger' && <LedgerView />}
-      {tab === 'settings' && <SettingsView />}
-      <GuestMigrationPrompt />
-    </Shell>
+    <MusicProvider>
+      <Shell>
+        {tab === 'today' && <TodayView />}
+        {tab === 'planner' && <PlannerView />}
+        {tab === 'dump' && <DumpView />}
+        {tab === 'diary' && <DiaryView />}
+        {tab === 'ledger' && <LedgerView />}
+        {tab === 'settings' && <SettingsView />}
+        <GuestMigrationPrompt />
+        <MusicSheet />
+      </Shell>
+    </MusicProvider>
   );
 }
 
