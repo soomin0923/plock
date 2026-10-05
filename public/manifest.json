@@ -1,48 +1,24 @@
 {
   "id": "/",
+  "name": "Plock — 플래너 · 다이어리 · 가계부",
   "short_name": "Plock",
-  "name": "Plock — Planner & Diary",
-  "description": "Plock은 직관적인 캘린더와 드래그 위젯 사이드바를 갖춘 스마트 플래너 및 다이어리 앱입니다.",
+  "description": "플래너, 사진·스티커 다이어리, 가계부를 한곳에서.",
   "lang": "ko",
-  "dir": "ltr",
-  "start_url": "/",
+  "start_url": "/#/today",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#FDFCF9",
-  "theme_color": "#1A1A1A",
-  "prefer_related_applications": false,
-  "categories": ["productivity", "utilities"],
+  "background_color": "#f8f5f0",
+  "theme_color": "#f8f5f0",
+  "categories": ["productivity", "lifestyle", "finance"],
   "icons": [
-    {
-      "src": "/pwa-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/pwa-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/maskable-icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/maskable-icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "일기 쓰기", "url": "/#/diary" },
+    { "name": "가계부", "url": "/#/ledger" },
+    { "name": "플래너", "url": "/#/planner" }
   ]
 }

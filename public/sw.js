@@ -1,93 +1,66 @@
-const CACHE_NAME = 'chronicle-pwa-v4';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/pwa-192x192.png',
-  '/pwa-512x512.png',
-  '/maskable-icon-512x512.png',
-  '/apple-touch-icon.png',
-  '/favicon.ico'
-];
+// Plock service worker: makes the app open offline and installable.
+// Only same-origin GET requests (the app shell and its hashed assets) and Google Fonts are cached.
+// Firebase / Firestore / Gemini traffic is never touched — Firestore keeps its own offline cache.
 
-// Service Worker Install - Skip waiting immediately
+const VERSION = 'plock-v2';
+const SHELL = ['/', '/index.html', '/manifest.json', '/pwa-192x192.png', '/pwa-512x512.png', '/favicon.ico'];
+
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return Promise.allSettled(
-        ASSETS_TO_CACHE.map((asset) =>
-          cache.add(asset).catch((err) => console.warn('[PWA SW] Pre-cache asset warning:', asset, err))
-        )
-      );
-    })
+    caches
+      .open(VERSION)
+      .then((cache) => Promise.allSettled(SHELL.map((url) => cache.add(url))))
+      .then(() => self.skipWaiting()),
   );
 });
 
-// Service Worker Activate - Claim clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
   );
 });
 
-// Service Worker Fetch - Network first for navigation with offline fallback, Cache first for static assets
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  const sameOrigin = url.origin === self.location.origin;
+  const isFont = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
+  if (!sameOrigin && !isFont) return;
+  // Firebase Auth helper pages must always come from the network.
+  if (sameOrigin && url.pathname.startsWith('/__/')) return;
 
-  const url = new URL(event.request.url);
-
-  // Handle only http / https
-  if (!url.protocol.startsWith('http')) return;
-
-  // SPA Navigation requests
-  if (event.request.mode === 'navigate') {
+  // Page loads: network first (always get the latest deploy), fall back to the cached shell offline.
+  if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseCopy = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseCopy));
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put('/index.html', copy));
           }
-          return networkResponse;
+          return res;
         })
-        .catch(() => {
-          return caches.match(event.request).then((cached) => {
-            return cached || caches.match('/index.html') || caches.match('/');
-          });
-        })
+        .catch(() => caches.match('/index.html').then((r) => r || caches.match('/'))),
     );
     return;
   }
 
-  // Static Assets (JS, CSS, Images, Fonts, Manifest)
+  // Hashed build assets and fonts never change: cache first.
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Background revalidate
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
+    caches.match(req).then(
+      (cached) =>
+        cached ||
+        fetch(req).then((res) => {
+          if (res.ok && (sameOrigin || res.type === 'cors')) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(req, copy));
           }
-        }).catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
-        }
-        return networkResponse;
-      });
-    })
+          return res;
+        }),
+    ),
   );
 });

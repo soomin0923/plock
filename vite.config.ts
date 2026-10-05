@@ -1,23 +1,21 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig } from 'vite';
 
-export default defineConfig(() => {
-  return {
-    base: './',
-    plugins: [react(), tailwindcss()],
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  build: {
+    // The Firestore SDK chunk (~140KB gzipped) is only loaded after sign-in.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Keep the big Firebase SDK in its own long-cached chunks.
+        manualChunks: (id) => {
+          if (id.includes('node_modules/@firebase/firestore') || id.includes('node_modules/firebase/firestore')) return 'firestore';
+          if (id.includes('node_modules/@firebase') || id.includes('node_modules/firebase')) return 'firebase';
+          if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react';
+        },
       },
     },
-    server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: false,
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
-    },
-  };
+  },
 });
