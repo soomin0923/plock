@@ -33,12 +33,18 @@ npm run dev          # http://localhost:5173
 npm run build        # 타입 검사 + 프로덕션 빌드 (dist/)
 ```
 
-로컬 Firebase 에뮬레이터로 로그인/동기화를 시험하려면:
+로컬 Firebase 에뮬레이터로 로그인/동기화를 시험하려면 (실제 프로젝트 데이터는 건드리지 않음):
 
 ```bash
-npx firebase emulators:start --only auth,firestore
-VITE_FIREBASE_EMULATOR=1 npm run dev
+# 터미널 1 — Auth·Firestore 에뮬레이터 (Java 21 이상 필요: java -version 으로 확인)
+npm run emulators
+# 터미널 2 — 에뮬레이터에 연결된 개발 서버 (.env.emulator 사용)
+npm run dev:emu
 ```
+
+> `npx firebase …`는 쓰지 마세요. 이 프로젝트의 `firebase`는 웹 SDK 패키지라 실행 파일이 없어서
+> `could not determine executable to run` 오류가 납니다. CLI 패키지 이름은 `firebase-tools`이고,
+> 위 npm 스크립트가 `npx firebase-tools …`로 실행합니다. (Windows cmd/PowerShell, macOS, Linux 동일)
 
 ## 배포 (Firebase Hosting)
 
@@ -51,10 +57,11 @@ VITE_FIREBASE_EMULATOR=1 npm run dev
 ### 2. 배포
 
 ```bash
-npm install -g firebase-tools   # 처음 한 번
-firebase login
-npm run deploy                  # 빌드 + Hosting + Firestore 보안 규칙 배포
+npm run firebase:login   # 처음 한 번: 브라우저가 열리면 Firebase 프로젝트 소유 Google 계정으로 로그인
+npm run deploy           # 빌드 + Hosting + Firestore 보안 규칙 배포
 ```
+
+배포가 끝나면 `https://pivotal-reducer-2thv3.web.app` 에 새 버전이 올라갑니다. (전역 설치 없이 `npx firebase-tools`로 실행)
 
 `firebase.json`이 Hosting(`dist/`)과 Firestore 규칙(`firestore.rules`, 데이터베이스
 `ai-studio-remixplannerdiar-…`)을 함께 배포합니다.
