@@ -8,6 +8,7 @@ import type {
   LedgerEntry,
   PlannerEvent,
   Prefs,
+  SqlSetup,
   StickerAsset,
   StickerPlacement,
   Task,
@@ -141,8 +142,33 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
     id: 'main',
     monthlyBudget: typeof r.monthlyBudget === 'number' && r.monthlyBudget > 0 ? r.monthlyBudget : undefined,
     weekStartsOn: r.weekStartsOn === 1 ? 1 : 0,
+    sql: normalizeSqlSetup(r.sql),
   }),
 };
+
+function normalizeSqlSetup(v: unknown): SqlSetup | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const r = v as Raw;
+  const sources = ['items', 'categories', 'none'];
+  return {
+    ddl: str(r.ddl),
+    include: r.include === 'tasks' || r.include === 'events' ? r.include : 'both',
+    bindings: Array.isArray(r.bindings)
+      ? (r.bindings as Raw[])
+          .filter((b) => b && typeof b === 'object' && typeof b.table === 'string')
+          .map((b) => ({
+            table: str(b.table),
+            source: (sources.includes(b.source as string) ? b.source : 'none') as SqlSetup['bindings'][number]['source'],
+            columns: Array.isArray(b.columns)
+              ? (b.columns as Raw[]).filter((c) => c && typeof c.column === 'string').map((c) => ({ column: str(c.column), field: str(c.field) }))
+              : [],
+          }))
+      : [],
+    queries: Array.isArray(r.queries)
+      ? (r.queries as Raw[]).filter((q) => q && typeof q === 'object' && typeof q.id === 'string').map((q) => ({ id: str(q.id), name: str(q.name, '내 쿼리'), sql: str(q.sql) }))
+      : [],
+  };
+}
 
 export function normalizeRecord<K extends CollectionName>(col: K, raw: unknown): CollectionMap[K] | null {
   if (!raw || typeof raw !== 'object') return null;

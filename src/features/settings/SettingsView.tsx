@@ -14,6 +14,7 @@ import { convertLegacy, countRecords, findLegacySources, legacyImportedKeys, mar
 import { cx, downloadBlob, readFileAsText } from '../../lib/util';
 import { today } from '../../lib/date';
 import { authErrorMessage } from '../../lib/auth';
+import { SqlSettingsSection } from '../sql/SqlSettingsSection';
 
 function Section({ id, icon, title, children, description }: { id: string; icon: React.ReactNode; title: string; description?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -37,7 +38,7 @@ export function SettingsView() {
   return (
     <div>
       <PageHeader title="설정" />
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <div className="space-y-4">
           <AccountSection />
           <AiSection />
@@ -45,6 +46,7 @@ export function SettingsView() {
         </div>
         <div className="space-y-4">
           <DataSection />
+          <SqlSettingsSection />
           <ReminderSection />
           <InstallSection />
           <p className="px-1 text-center text-[12px] text-faint">Plock 2.0 · 플래너 · 다이어리 · 가계부</p>

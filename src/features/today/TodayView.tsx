@@ -76,7 +76,7 @@ export function TodayView() {
 
       <QuickAdd className="mb-5" placeholder="일정·할 일·습관을 말하듯 적어 보세요" examples={['내일 오후 2시 치과', '금요일까지 과제 제출', '매일 물 2L 마시기']} onSubmit={onQuick} />
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <div className="space-y-4">
           <Card className="p-4">
             <SectionTitle

@@ -31,7 +31,7 @@ export function LedgerStats({ month }: { month: string }) {
   const max = byCategory[0]?.amount || 1;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
       <Card className="p-4 sm:p-5">
         <SectionTitle
           action={

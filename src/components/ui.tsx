@@ -101,7 +101,8 @@ function useBodyScrollLock(active: boolean) {
 
 interface SheetProps {
   open: boolean;
-  onClose: () => void;
+  /** May return false (or a Promise of false) to stay open, e.g. after an unsaved-changes prompt. */
+  onClose: () => void | boolean | Promise<boolean>;
   title?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -124,7 +125,7 @@ export function Sheet({ open, onClose, title, children, footer, size = 'md', hea
   const width = size === 'sm' ? 'sm:max-w-sm' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg';
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true">
-      <div className="animate-fade absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="animate-fade absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={() => onClose()} />
       <div
         className={cx(
           'sheet-panel relative flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-card shadow-pop sm:max-h-[86dvh] sm:rounded-3xl',
@@ -136,7 +137,7 @@ export function Sheet({ open, onClose, title, children, footer, size = 'md', hea
           <div className="flex flex-none items-center gap-2 px-5 pb-2 pt-3 sm:pt-5">
             <h2 className="min-w-0 flex-1 truncate text-lg font-bold tracking-tight">{title}</h2>
             {headerRight}
-            <button onClick={onClose} className="-mr-2 rounded-full p-2 text-muted hover:bg-hover hover:text-ink" aria-label="닫기">
+            <button onClick={() => onClose()} className="-mr-2 rounded-full p-2 text-muted hover:bg-hover hover:text-ink" aria-label="닫기">
               <X className="h-5 w-5" />
             </button>
           </div>

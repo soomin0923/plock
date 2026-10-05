@@ -16,11 +16,13 @@ import { TaskSection, toggleTask } from './TaskSection';
 import { HabitSection } from './HabitSection';
 import { CategoryManager } from './CategoryManager';
 import { IcsSheet } from './IcsSheet';
+import { SqlViewsSection } from '../sql/SqlViewsSection';
 
-type Section = 'calendar' | 'tasks' | 'habits';
+type Section = 'calendar' | 'tasks' | 'habits' | 'sql';
 
 export function PlannerView() {
-  const { data } = useData();
+  const { data, prefs } = useData();
+  const hasSqlViews = !!prefs.sql?.ddl.trim() && !!prefs.sql.queries.length;
   const toast = useToast();
   const [section, setSection] = useState<Section>('calendar');
   const [selected, setSelected] = useState(today());
@@ -65,11 +67,13 @@ export function PlannerView() {
           { value: 'calendar', label: '캘린더' },
           { value: 'tasks', label: '할 일' },
           { value: 'habits', label: '습관' },
+          ...(hasSqlViews || section === 'sql' ? [{ value: 'sql' as Section, label: '내 쿼리' }] : []),
         ]}
       />
       {section === 'calendar' && <CalendarSection selected={selected} setSelected={setSelected} openSheet={setSheet} />}
       {section === 'tasks' && <TaskSection openSheet={setSheet} />}
       {section === 'habits' && <HabitSection openSheet={setSheet} />}
+      {section === 'sql' && <SqlViewsSection openSheet={setSheet} />}
 
       <PlanSheet state={sheet} onClose={() => setSheet(null)} />
       <CategoryManager open={catOpen} onClose={() => setCatOpen(false)} />
@@ -86,7 +90,7 @@ function CalendarSection({ selected, setSelected, openSheet }: { selected: strin
   const taskCount = (d: string) => data.tasks.filter((t) => !t.done && t.dueDate === d).length;
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px] [&>*]:min-w-0">
       <Card className="p-3 sm:p-4">
         {mode === 'month' ? (
           <>

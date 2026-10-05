@@ -9,8 +9,8 @@ export type Intent =
   | { type: 'diary-open'; id: string }
   | { type: 'ledger-add'; date: string }
   | { type: 'planner-date'; date: string }
-  | { type: 'planner-section'; section: 'calendar' | 'tasks' | 'habits' }
-  | { type: 'settings-section'; section: 'account' | 'ai' | 'data' };
+  | { type: 'planner-section'; section: 'calendar' | 'tasks' | 'habits' | 'sql' }
+  | { type: 'settings-section'; section: 'account' | 'ai' | 'data' | 'sql' };
 
 interface RouterApi {
   tab: Tab;
