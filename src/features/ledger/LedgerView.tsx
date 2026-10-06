@@ -134,7 +134,7 @@ export function LedgerView() {
       />
       <input ref={receiptInput} type="file" accept="image/*" className="hidden" onChange={(e) => (onReceipt(e.target.files?.[0]), (e.target.value = ''))} />
 
-      <QuickAdd className="mb-4" placeholder="예: 점심 김밥 4500원, 커피 2000원" examples={['어제 택시 12800원', '스벅 라떼 5500 카드', '월급 250만원 입금']} onSubmit={onQuick} />
+      <QuickAdd className="mb-4" placeholder="예: 점심 김밥 4500원, 커피 2000원" onSubmit={onQuick} />
 
       <MonthNav month={month} onPrev={() => (setMonth(addMonths(month, -1)), setDayFilter(null))} onNext={() => (setMonth(addMonths(month, 1)), setDayFilter(null))} onToday={() => (setMonth(today()), setDayFilter(null))} />
 

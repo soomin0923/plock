@@ -72,7 +72,7 @@ export function DiaryViewer({ id, onClose, onEdit, onNavigate }: { id: string; o
           <IconButton label="삭제" onClick={del} className="hover:text-expense">
             <Trash2 className="h-5 w-5" />
           </IconButton>
-          <button onClick={() => onEdit(entry)} className="ml-1 inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-white">
+          <button onClick={() => onEdit(entry)} className="ml-1 inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-on-primary">
             <Pencil className="h-4 w-4" /> 편집
           </button>
         </div>

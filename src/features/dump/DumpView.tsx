@@ -159,7 +159,7 @@ export function DumpView() {
             enterKeyHint="done"
             className="min-w-0 flex-1 rounded-2xl border border-line bg-paper/60 px-4 py-3 text-[15px] placeholder:text-faint focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary-soft"
           />
-          <button type="submit" disabled={!draft.text.trim()} aria-label="메모 추가" className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-primary text-white shadow-card transition disabled:bg-line-strong">
+          <button type="submit" disabled={!draft.text.trim()} aria-label="메모 추가" className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-primary text-on-primary shadow-card transition disabled:bg-line-strong">
             <Plus className="h-6 w-6" />
           </button>
         </form>
@@ -214,7 +214,7 @@ export function DumpView() {
         )}
       </Card>
 
-      <div className="no-scrollbar -mx-1 mt-4 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="메모 거르기">
+      <div className="drag-scroll no-scrollbar -mx-1 mt-4 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="메모 거르기">
         {[
           { id: 'all', name: '전체', color: '' },
           { id: 'star', name: '⭐ 보관함', color: '' },
@@ -225,8 +225,8 @@ export function DumpView() {
             type="button"
             aria-pressed={filter === c.id}
             onClick={() => setFilter(filter === c.id && c.id !== 'all' ? 'all' : c.id)}
-            className={cx('flex flex-none items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold transition', filter === c.id ? 'border-transparent bg-ink text-white' : 'border-line-strong text-ink-soft hover:bg-hover')}
-            style={filter === c.id && c.color ? { background: c.color } : undefined}
+            className={cx('flex flex-none items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold transition', filter === c.id ? 'border-transparent bg-ink text-card' : 'border-line-strong text-ink-soft hover:bg-hover')}
+            style={filter === c.id && c.color ? { background: c.color, color: '#fff' } : undefined}
           >
             {c.color && filter !== c.id && <span className="h-2 w-2 rounded-full" style={{ background: c.color }} />}
             {c.name}

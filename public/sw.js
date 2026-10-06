@@ -2,8 +2,8 @@
 // Only same-origin GET requests (the app shell and its hashed assets) and Google Fonts are cached.
 // Firebase / Firestore / Gemini traffic is never touched — Firestore keeps its own offline cache.
 
-const VERSION = 'plock-v2';
-const SHELL = ['/', '/index.html', '/manifest.json', '/pwa-192x192.png', '/pwa-512x512.png', '/favicon.ico'];
+const VERSION = 'plock-v3';
+const SHELL = ['/', '/index.html', '/manifest.json', '/pwa-192x192.png', '/pwa-512x512.png', '/favicon.ico', '/favicon.svg', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

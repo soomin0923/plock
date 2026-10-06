@@ -151,11 +151,11 @@ function ColumnChart({ bars, height = 160, xLabels }: { bars: Bar[]; height?: nu
           </div>
           {hover !== null && bars[hover] && (
             <div
-              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-center text-white shadow-lg"
+              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-center text-card shadow-lg"
               style={{ left: `${((hover + 0.5) / bars.length) * 100}%`, top: Math.max(0, height - (bars[hover].value / top) * height - 6) }}
             >
               <span className="block text-[13px] font-bold tabular">{won(bars[hover].value)}</span>
-              <span className="block text-[11px] text-white/70">{bars[hover].label}</span>
+              <span className="block text-[11px] text-card/70">{bars[hover].label}</span>
             </div>
           )}
         </div>

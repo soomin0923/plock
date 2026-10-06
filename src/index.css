@@ -3,18 +3,20 @@
 
 @theme {
   --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-  --color-ink: #2a2622;
-  --color-ink-soft: #57504a;
-  --color-muted: #8d857c;
-  --color-faint: #b9b1a7;
-  --color-paper: #f8f5f0;
-  --color-card: #ffffff;
-  --color-line: #ebe5dc;
-  --color-line-strong: #ddd5ca;
-  --color-hover: #f3efe9;
+  /* Base colors come from 설정 > 화면 (ThemeSync in App.tsx); the in-between tones are mixed from them. */
+  --color-ink: var(--app-ink);
+  --color-ink-soft: color-mix(in srgb, var(--app-ink) 78%, var(--app-card));
+  --color-muted: color-mix(in srgb, var(--app-ink) 55%, var(--app-card));
+  --color-faint: color-mix(in srgb, var(--app-ink) 34%, var(--app-card));
+  --color-paper: var(--app-paper);
+  --color-card: var(--app-card);
+  --color-line: color-mix(in srgb, var(--app-ink) 9%, var(--app-paper));
+  --color-line-strong: color-mix(in srgb, var(--app-ink) 15%, var(--app-paper));
+  --color-hover: color-mix(in srgb, var(--app-ink) 5%, var(--app-paper));
   --color-primary: var(--app-primary);
   --color-primary-soft: var(--app-primary-soft);
   --color-primary-light: var(--app-primary-light);
+  --color-on-primary: var(--app-on-primary);
   --color-expense: #d0485a;
   --color-income: #2b8a5a;
   --radius-xl: 0.875rem;
@@ -27,6 +29,10 @@
   --app-primary: #c1876b;
   --app-primary-soft: rgba(193, 135, 107, 0.12);
   --app-primary-light: #f0c8b5;
+  --app-on-primary: #ffffff;
+  --app-paper: #f8f5f0;
+  --app-card: #ffffff;
+  --app-ink: #2a2622;
   color-scheme: light;
   -webkit-tap-highlight-color: transparent;
 }
@@ -263,4 +269,11 @@ button:disabled {
   .vinyl-spin {
     animation-duration: 12s;
   }
+}
+
+/* Mouse drag-to-scroll for chip rows (see lib/dragScroll.ts) */
+.drag-scroll.dragging,
+.drag-scroll.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
 }

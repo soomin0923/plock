@@ -15,20 +15,26 @@ import { MusicProvider } from './features/music/MusicProvider';
 import { MusicSheet } from './features/music/MusicWidgets';
 import { SettingsView } from './features/settings/SettingsView';
 import { useDeviceSettings } from './lib/deviceSettings';
-import { hexToRgba } from './lib/util';
+import { hexToRgba, luminance, readableOn } from './lib/util';
 import { useReminders } from './lib/reminders';
 import { AuthSheetContext } from './app/authSheet';
 
 
 function ThemeSync() {
-  const { themeColor } = useDeviceSettings();
+  const { themeColor, bgColor, cardColor, textColor } = useDeviceSettings();
   useEffect(() => {
     const root = document.documentElement.style;
+    const dark = luminance(bgColor) < 0.2;
     root.setProperty('--app-primary', themeColor);
-    root.setProperty('--app-primary-soft', hexToRgba(themeColor, 0.12));
+    root.setProperty('--app-primary-soft', hexToRgba(themeColor, dark ? 0.2 : 0.12));
     root.setProperty('--app-primary-light', hexToRgba(themeColor, 0.45));
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#f8f5f0');
-  }, [themeColor]);
+    root.setProperty('--app-on-primary', readableOn(themeColor));
+    root.setProperty('--app-paper', bgColor);
+    root.setProperty('--app-card', cardColor);
+    root.setProperty('--app-ink', textColor);
+    root.setProperty('color-scheme', dark ? 'dark' : 'light');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bgColor);
+  }, [themeColor, bgColor, cardColor, textColor]);
   return null;
 }
 

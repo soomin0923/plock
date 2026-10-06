@@ -14,9 +14,9 @@ export function CategoryPicker({ value, onChange, allowNone }: { value?: string;
   const { data } = useData();
   const cats = sortCategories(data.categories);
   return (
-    <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+    <div className="drag-scroll no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
       {allowNone && (
-        <button type="button" onClick={() => onChange(undefined)} className={cx('flex-none rounded-full border px-3 py-1.5 text-[13px] font-semibold', !value ? 'border-ink bg-ink text-white' : 'border-line-strong text-muted')}>
+        <button type="button" onClick={() => onChange(undefined)} className={cx('flex-none rounded-full border px-3 py-1.5 text-[13px] font-semibold', !value ? 'border-ink bg-ink text-card' : 'border-line-strong text-muted')}>
           없음
         </button>
       )}
@@ -294,7 +294,7 @@ export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: b
         </div>
         <div className="grid grid-cols-7 gap-1.5">
           {orderedWeekdays(prefs.weekStartsOn).map((d) => (
-            <button key={d} type="button" onClick={() => toggleDay(d)} className={cx('h-10 rounded-xl text-sm font-bold', h.days.includes(d) ? 'bg-primary text-white' : 'bg-hover text-muted')}>
+            <button key={d} type="button" onClick={() => toggleDay(d)} className={cx('h-10 rounded-xl text-sm font-bold', h.days.includes(d) ? 'bg-primary text-on-primary' : 'bg-hover text-muted')}>
               {WEEKDAYS_KR[d]}
             </button>
           ))}

@@ -59,7 +59,7 @@ export function PhotoPicker({
           <button
             type="button"
             onClick={() => onChange(value.filter((r) => r !== ref))}
-            className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-white shadow"
+            className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-ink text-card shadow"
             aria-label="사진 빼기"
           >
             <X className="h-3.5 w-3.5" />

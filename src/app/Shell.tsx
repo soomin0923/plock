@@ -53,7 +53,7 @@ function Avatar({ size = 32 }: { size?: number }) {
     return <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="flex-none rounded-full object-cover" style={{ width: size, height: size }} />;
   return (
     <span
-      className={cx('flex flex-none items-center justify-center rounded-full text-sm font-bold', user ? 'bg-primary text-white' : 'bg-hover text-muted')}
+      className={cx('flex flex-none items-center justify-center rounded-full text-sm font-bold', user ? 'bg-primary text-on-primary' : 'bg-hover text-muted')}
       style={{ width: size, height: size }}
     >
       {user ? letter : '?'}

@@ -15,7 +15,7 @@ export function StickerPicker({ onPick, onMake }: { onPick: (kind: 'emoji' | 'im
 
   return (
     <div>
-      <div className="no-scrollbar -mx-1 mb-3 overflow-x-auto px-1">
+      <div className="drag-scroll no-scrollbar -mx-1 mb-3 overflow-x-auto px-1">
         <Segmented
           size="sm"
           value={tab}

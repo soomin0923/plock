@@ -68,7 +68,7 @@ export function HabitSection({ openSheet }: { openSheet: (s: PlanSheetState) => 
                         aria-pressed={done}
                         className={cx(
                           'flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold transition',
-                          done ? 'bg-primary text-white' : scheduled ? 'bg-hover text-ink-soft' : 'text-faint',
+                          done ? 'bg-primary text-on-primary' : scheduled ? 'bg-hover text-ink-soft' : 'text-faint',
                           d === d0 && !done && 'ring-2 ring-primary/60',
                           future && 'opacity-40',
                         )}

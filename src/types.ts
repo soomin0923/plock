@@ -134,39 +134,19 @@ export interface MusicTrack {
   listId?: string;
 }
 
-// ---- User-designed SQL layer (설정 > 일정 DB).
-// The user writes the CREATE TABLE statements and the queries; the app only fills the tables
-// with the user's plan data according to the column mapping, and runs the saved queries.
-
-/** Which app data fills a table: plan items (tasks/events), categories, or nothing. */
-export type SqlSource = 'items' | 'categories' | 'none';
-
-export interface SqlTableBinding {
-  table: string;
-  source: SqlSource;
-  /** column → source field key ('' = leave NULL / column default) */
-  columns: { column: string; field: string }[];
-}
-
-export interface SqlSavedQuery {
-  id: string;
-  name: string;
-  sql: string;
-}
-
-export interface SqlSetup {
-  ddl: string;
-  include: 'tasks' | 'events' | 'both';
-  bindings: SqlTableBinding[];
-  queries: SqlSavedQuery[];
-}
-
 // Single settings record per account (id = 'main'), synced like other data.
 export interface Prefs extends BaseRecord {
   monthlyBudget?: number;
   weekStartsOn: 0 | 1;
-  sql?: SqlSetup;
   music?: MusicTrack[];
+  /** 오늘 page widgets, in display order. Absent = default layout. */
+  todayWidgets?: TodayWidget[];
+}
+
+export interface TodayWidget {
+  id: string;
+  /** Spans both columns on wide screens. */
+  wide?: boolean;
 }
 
 export interface CollectionMap {

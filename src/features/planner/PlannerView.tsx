@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookHeart, CalendarDays, ChevronLeft, ChevronRight, FileDown, Plus, Tags, Wallet } from 'lucide-react';
+import { BookHeart, CalendarDays, ChevronLeft, ChevronRight, FileDown, Pencil, Plus, Tags, Wallet } from 'lucide-react';
 import { useData } from '../../data/DataProvider';
 import type { PlannerEvent } from '../../types';
 import { PageHeader } from '../../app/Shell';
@@ -18,13 +18,11 @@ import { TaskSection, toggleTask } from './TaskSection';
 import { HabitSection } from './HabitSection';
 import { CategoryManager } from './CategoryManager';
 import { IcsSheet } from './IcsSheet';
-import { SqlViewsSection } from '../sql/SqlViewsSection';
 
-type Section = 'calendar' | 'tasks' | 'habits' | 'sql';
+type Section = 'calendar' | 'tasks' | 'habits';
 
 export function PlannerView() {
-  const { data, prefs } = useData();
-  const hasSqlViews = !!prefs.sql?.ddl.trim() && !!prefs.sql.queries.length;
+  const { data } = useData();
   const toast = useToast();
   const [section, setSection] = useState<Section>('calendar');
   const [selected, setSelected] = useState(today());
@@ -60,7 +58,7 @@ export function PlannerView() {
           </>
         }
       />
-      <QuickAdd className="mb-4" placeholder="예: 내일 오후 3시 팀 회의" examples={['금요일까지 보고서 제출', '다음 주 토요일 친구 생일', '매일 아침 스트레칭']} onSubmit={onQuick} />
+      <QuickAdd className="mb-4" placeholder="예: 내일 오후 3시 팀 회의" onSubmit={onQuick} />
       <Segmented<Section>
         value={section}
         onChange={setSection}
@@ -69,13 +67,11 @@ export function PlannerView() {
           { value: 'calendar', label: '캘린더' },
           { value: 'tasks', label: '할 일' },
           { value: 'habits', label: '습관' },
-          ...(hasSqlViews || section === 'sql' ? [{ value: 'sql' as Section, label: '내 쿼리' }] : []),
         ]}
       />
-      {section === 'calendar' && <CalendarSection selected={selected} setSelected={setSelected} openSheet={setSheet} />}
+      {section === 'calendar' && <CalendarSection selected={selected} setSelected={setSelected} openSheet={setSheet} onEditCategories={() => setCatOpen(true)} />}
       {section === 'tasks' && <TaskSection openSheet={setSheet} />}
       {section === 'habits' && <HabitSection openSheet={setSheet} />}
-      {section === 'sql' && <SqlViewsSection openSheet={setSheet} />}
 
       <PlanSheet state={sheet} onClose={() => setSheet(null)} />
       <CategoryManager open={catOpen} onClose={() => setCatOpen(false)} />
@@ -84,7 +80,7 @@ export function PlannerView() {
   );
 }
 
-function CalendarSection({ selected, setSelected, openSheet }: { selected: string; setSelected: (d: string) => void; openSheet: (s: PlanSheetState) => void }) {
+function CalendarSection({ selected, setSelected, openSheet, onEditCategories }: { selected: string; setSelected: (d: string) => void; openSheet: (s: PlanSheetState) => void; onEditCategories: () => void }) {
   const { data, prefs } = useData();
   const [mode, setMode] = useState<'month' | 'week'>('month');
   const [catFilter, setCatFilter] = useState<string>('all');
@@ -97,7 +93,7 @@ function CalendarSection({ selected, setSelected, openSheet }: { selected: strin
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px] [&>*]:min-w-0">
       <Card className="p-3 sm:p-4">
-        <CategoryChips value={catFilter} onChange={setCatFilter} />
+        <CategoryChips value={catFilter} onChange={setCatFilter} onEdit={onEditCategories} />
         {mode === 'month' ? (
           <>
             <MonthNav
@@ -149,11 +145,11 @@ function CalendarSection({ selected, setSelected, openSheet }: { selected: strin
 }
 
 /** 전체 + each category; filters what the calendar and the day panel show. */
-function CategoryChips({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+function CategoryChips({ value, onChange, onEdit }: { value: string; onChange: (id: string) => void; onEdit: () => void }) {
   const { data } = useData();
   const cats = sortCategories(data.categories);
   return (
-    <div className="no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="카테고리로 보기">
+    <div className="drag-scroll no-scrollbar -mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="카테고리로 보기">
       {[{ id: 'all', name: '전체', color: '' }, ...cats].map((c) => {
         const active = value === c.id;
         return (
@@ -162,14 +158,17 @@ function CategoryChips({ value, onChange }: { value: string; onChange: (id: stri
             type="button"
             aria-pressed={active}
             onClick={() => onChange(active && c.id !== 'all' ? 'all' : c.id)}
-            className={cx('flex flex-none items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold transition', active ? 'border-transparent text-white' : 'border-line-strong text-ink-soft hover:bg-hover')}
-            style={active ? { background: c.color || 'var(--color-ink)' } : undefined}
+            className={cx('flex flex-none items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold transition', active ? 'border-transparent' : 'border-line-strong text-ink-soft hover:bg-hover')}
+            style={active ? { background: c.color || 'var(--color-ink)', color: c.color ? '#fff' : 'var(--color-card)' } : undefined}
           >
             {c.color && !active && <span className="h-2 w-2 rounded-full" style={{ background: c.color }} />}
             {c.name}
           </button>
         );
       })}
+      <button type="button" onClick={onEdit} aria-label="카테고리 편집 (이름·색)" title="카테고리 편집" className="flex flex-none items-center rounded-full px-2 text-muted hover:bg-hover hover:text-primary">
+        <Pencil className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -220,7 +219,7 @@ function WeekView({ events, selected, setSelected, mode, setMode, openSheet }: {
             >
               <div className="mb-1.5 flex items-center justify-between md:block">
                 <span className={cx('text-[13px] font-bold', wd === 0 || holiday ? 'text-expense' : wd === 6 ? 'text-sky-600' : 'text-ink-soft')}>
-                  {WEEKDAYS_KR[wd]} <span className={cx('tabular', d === t && 'rounded-full bg-primary px-1.5 text-white')}>{parseYmd(d).getDate()}</span>
+                  {WEEKDAYS_KR[wd]} <span className={cx('tabular', d === t && 'rounded-full bg-primary px-1.5 text-on-primary')}>{parseYmd(d).getDate()}</span>
                   {holiday && <span className="ml-1 text-[11px] font-medium">{holiday}</span>}
                 </span>
                 <button

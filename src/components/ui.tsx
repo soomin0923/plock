@@ -162,7 +162,7 @@ export function Button({
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: 'sm' | 'md' | 'lg'; icon?: React.ReactNode }) {
   const v: Record<ButtonVariant, string> = {
-    primary: 'bg-primary text-white hover:brightness-95 active:brightness-90 shadow-sm',
+    primary: 'bg-primary text-on-primary hover:brightness-95 active:brightness-90 shadow-sm',
     secondary: 'bg-card text-ink border border-line-strong hover:bg-hover',
     ghost: 'text-ink-soft hover:bg-hover hover:text-ink',
     danger: 'bg-expense text-white hover:brightness-95',

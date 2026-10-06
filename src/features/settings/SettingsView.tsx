@@ -7,15 +7,14 @@ import { HIDEABLE_TABS, NAV, PageHeader } from '../../app/Shell';
 import { useMusic } from '../music/MusicProvider';
 import { Button, Card, Field, Segmented, Select, Spinner, TextInput, Toggle, useConfirm } from '../../components/ui';
 import { useToast } from '../../components/Toast';
-import { setDeviceSettings, useDeviceSettings } from '../../lib/deviceSettings';
+import { DEFAULT_COLORS, setDeviceSettings, useDeviceSettings } from '../../lib/deviceSettings';
 import { pickDefaultModel, testGeminiKey, type GeminiModel } from '../../lib/gemini';
 import { requestNotificationPermission, testReminder } from '../../lib/reminders';
-import { THEME_COLORS } from '../../data/defaults';
+import { THEME_COLORS, THEME_PRESETS } from '../../data/defaults';
 import { convertLegacy, countRecords, findLegacySources, legacyImportedKeys, markLegacyImported, parseBackup, type LegacySource } from '../../data/bundle';
-import { cx, downloadBlob, readFileAsText } from '../../lib/util';
+import { contrastRatio, cx, downloadBlob, readFileAsText } from '../../lib/util';
 import { today } from '../../lib/date';
 import { authErrorMessage } from '../../lib/auth';
-import { SqlSettingsSection } from '../sql/SqlSettingsSection';
 
 function Section({ id, icon, title, children, description }: { id: string; icon: React.ReactNode; title: string; description?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -48,7 +47,6 @@ export function SettingsView() {
         </div>
         <div className="space-y-4">
           <DataSection />
-          <SqlSettingsSection />
           <ReminderSection />
           <InstallSection />
           <p className="px-1 text-center text-[12px] text-faint">Plock 2.0 · 플래너 · 다이어리 · 가계부</p>
@@ -79,7 +77,7 @@ function AccountSection() {
             {user.photoURL ? (
               <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="h-11 w-11 rounded-full" />
             ) : (
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-lg font-bold text-white">{(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}</span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-lg font-bold text-on-primary">{(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}</span>
             )}
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold">{user.displayName || '내 계정'}</p>
@@ -225,20 +223,51 @@ function AiSection() {
 // ------------------------------------------------------------------ appearance
 
 function AppearanceSection() {
-  const { themeColor } = useDeviceSettings();
+  const st = useDeviceSettings();
   const { prefs, savePrefs } = useData();
+  const isPreset = (p: (typeof THEME_PRESETS)[number]) =>
+    (['themeColor', 'bgColor', 'cardColor', 'textColor'] as const).every((k) => p[k].toLowerCase() === st[k].toLowerCase());
+  const lowText = contrastRatio(st.textColor, st.cardColor) < 4.5 || contrastRatio(st.textColor, st.bgColor) < 4.5;
   return (
     <Section id="look" icon={<Palette className="h-5 w-5" />} title="화면">
-      <Field label="테마 색">
-        <div className="flex flex-wrap gap-3">
-          {THEME_COLORS.map((t) => (
-            <button key={t.color} onClick={() => setDeviceSettings({ themeColor: t.color })} className="flex flex-col items-center gap-1 text-[12px] font-medium text-ink-soft">
-              <span className={cx('h-9 w-9 rounded-full transition', themeColor === t.color && 'ring-2 ring-ink ring-offset-2')} style={{ background: t.color }} />
-              {t.name}
-            </button>
-          ))}
+      <Field label="테마">
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-4">
+          {THEME_PRESETS.map((p) => {
+            const on = isPreset(p);
+            return (
+              <button
+                key={p.name}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setDeviceSettings({ themeColor: p.themeColor, bgColor: p.bgColor, cardColor: p.cardColor, textColor: p.textColor })}
+                className={cx('flex flex-col items-center gap-1 rounded-xl p-1 text-[12px] font-medium text-ink-soft transition', on && 'ring-2 ring-ink')}
+              >
+                <span className="flex h-12 w-full items-center justify-center gap-1 rounded-lg border border-line" style={{ background: p.bgColor }}>
+                  <span className="flex h-7 w-9 items-center justify-center rounded-md text-[11px] font-bold shadow-sm" style={{ background: p.cardColor, color: p.textColor }}>
+                    가
+                  </span>
+                  <span className="h-4 w-4 rounded-full" style={{ background: p.themeColor }} />
+                </span>
+                {p.name}
+              </button>
+            );
+          })}
         </div>
       </Field>
+
+      <div className="mt-4 space-y-2.5">
+        <p className="text-[15px] font-medium">색 직접 고르기</p>
+        <ColorSetting label="배경" value={st.bgColor} onChange={(bgColor) => setDeviceSettings({ bgColor })} />
+        <ColorSetting label="카드·창" value={st.cardColor} onChange={(cardColor) => setDeviceSettings({ cardColor })} />
+        <ColorSetting label="글자" value={st.textColor} onChange={(textColor) => setDeviceSettings({ textColor })} />
+        <ColorSetting label="포인트(버튼)" value={st.themeColor} onChange={(themeColor) => setDeviceSettings({ themeColor })} quick={THEME_COLORS.map((t) => t.color)} />
+        {lowText && <p className="rounded-xl bg-amber-50 px-3 py-2 text-[13px] text-amber-800">글자색과 배경색이 너무 비슷해서 잘 안 보일 수 있어요.</p>}
+        <div className="flex justify-end">
+          <Button size="sm" variant="ghost" onClick={() => setDeviceSettings({ ...DEFAULT_COLORS })}>
+            기본 색으로
+          </Button>
+        </div>
+      </div>
       <div className="mt-4 flex items-center justify-between gap-3">
         <span className="text-[15px] font-medium">한 주의 시작</span>
         <Segmented<'0' | '1'>
@@ -291,6 +320,40 @@ function MusicSection() {
         <Button onClick={m.openSheet}>{m.tracks.length ? '판 바꾸기' : '판 올리기'}</Button>
       </div>
     </Section>
+  );
+}
+
+function ColorSetting({ label, value, onChange, quick }: { label: string; value: string; onChange: (v: string) => void; quick?: string[] }) {
+  const [text, setText] = useState(value);
+  const [prev, setPrev] = useState(value);
+  if (prev !== value) {
+    setPrev(value);
+    setText(value);
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-24 flex-none text-[14px] text-ink-soft">{label}</span>
+      <label className="relative h-8 w-11 flex-none cursor-pointer overflow-hidden rounded-lg border border-line-strong" style={{ background: value }} title={`${label} 색 고르기`}>
+        <input type="color" value={/^#[0-9a-f]{6}$/i.test(value) ? value : '#888888'} onChange={(e) => onChange(e.target.value.toUpperCase())} aria-label={`${label} 색`} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+      </label>
+      <input
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const v = e.target.value.trim();
+          if (/^#?[0-9a-f]{6}$/i.test(v)) onChange((v.startsWith('#') ? v : `#${v}`).toUpperCase());
+        }}
+        aria-label={`${label} 색 코드`}
+        className="w-24 rounded-lg border border-line-strong bg-card px-2 py-1 font-mono text-[13px] uppercase focus:border-primary focus:outline-none"
+      />
+      {quick && (
+        <div className="flex flex-wrap gap-1.5">
+          {quick.map((c) => (
+            <button key={c} type="button" onClick={() => onChange(c)} aria-label={c} className={cx('h-6 w-6 rounded-full', c.toLowerCase() === value.toLowerCase() && 'ring-2 ring-ink ring-offset-1')} style={{ background: c }} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -93,8 +93,9 @@ export function CategoryManager({ open, onClose }: { open: boolean; onClose: () 
 }
 
 export function ColorRow({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const custom = !CATEGORY_COLORS.some((c) => c.toLowerCase() === value.toLowerCase());
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {CATEGORY_COLORS.map((c) => (
         <button
           key={c}
@@ -105,6 +106,37 @@ export function ColorRow({ value, onChange }: { value: string; onChange: (c: str
           style={{ background: c }}
         />
       ))}
+      <ColorPickerSwatch value={value} onChange={onChange} selected={custom} />
     </div>
+  );
+}
+
+/** Rainbow swatch that opens the system color palette; shows the chosen color once picked. */
+export function ColorPickerSwatch({ value, onChange, selected, label = '직접 고르기' }: { value: string; onChange: (c: string) => void; selected?: boolean; label?: string }) {
+  // Local state: saving is async, so a controlled input would briefly snap back to the old color
+  // and the browser's trailing `change` event would then save that old color again.
+  const [local, setLocal] = useState(value);
+  const [prev, setPrev] = useState(value);
+  if (prev !== value) {
+    setPrev(value);
+    setLocal(value);
+  }
+  return (
+    <label
+      title={label}
+      className={cx('relative flex h-7 w-7 cursor-pointer items-center justify-center overflow-hidden rounded-full transition', selected && 'ring-2 ring-ink ring-offset-2')}
+      style={{ background: selected ? value : 'conic-gradient(#f87171, #fbbf24, #a3e635, #34d399, #38bdf8, #818cf8, #e879f9, #f87171)' }}
+    >
+      {!selected && <span className="h-3 w-3 rounded-full bg-white/90" />}
+      <input
+        type="color"
+        value={/^#[0-9a-f]{6}$/i.test(local) ? local.toLowerCase() : '#888888'}
+        onChange={(e) => {
+          const v = e.target.value;
+          setLocal(v);
+          if (v.toLowerCase() !== value.toLowerCase()) onChange(v);
+        }}
+        aria-label={label} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+    </label>
   );
 }

@@ -4,7 +4,12 @@ import { useSyncExternalStore } from 'react';
 // theme color, the user's own Gemini API key, reminder preferences, which tabs to show.
 
 export interface DeviceSettings {
+  /** Accent color (buttons, highlights). */
   themeColor: string;
+  /** Page background, card/panel background, and text color. */
+  bgColor: string;
+  cardColor: string;
+  textColor: string;
   geminiKey: string;
   /** Empty = pick automatically (newest Flash model available to the key). */
   geminiModel: string;
@@ -20,6 +25,9 @@ const KEY = 'plock_device_settings_v2';
 
 const defaults: DeviceSettings = {
   themeColor: '#C1876B',
+  bgColor: '#F8F5F0',
+  cardColor: '#FFFFFF',
+  textColor: '#2A2622',
   geminiKey: '',
   geminiModel: '',
   remindersEnabled: false,
@@ -43,6 +51,8 @@ function load(): DeviceSettings {
 
 let state: DeviceSettings = typeof window === 'undefined' ? defaults : load();
 const listeners = new Set<() => void>();
+
+export const DEFAULT_COLORS = { themeColor: defaults.themeColor, bgColor: defaults.bgColor, cardColor: defaults.cardColor, textColor: defaults.textColor };
 
 export function getDeviceSettings(): DeviceSettings {
   return state;

@@ -85,7 +85,7 @@ export function MonthGrid({
                 <span
                   className={cx(
                     'flex h-6 w-6 flex-none items-center justify-center rounded-full text-[13px] font-semibold tabular sm:ml-0.5',
-                    info.isToday ? 'bg-primary text-white' : wd === 0 || holiday ? 'text-expense' : wd === 6 ? 'text-sky-600' : 'text-ink',
+                    info.isToday ? 'bg-primary text-on-primary' : wd === 0 || holiday ? 'text-expense' : wd === 6 ? 'text-sky-600' : 'text-ink',
                   )}
                 >
                   {parseYmd(date).getDate()}

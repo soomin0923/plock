@@ -101,6 +101,18 @@ export const CATEGORY_COLORS = [
   '#E0913A', '#D45D8C', '#2E9C9C', '#7BA23F', '#B5873A', '#8A8378',
 ];
 
+/** Whole-screen color sets for 설정 > 화면. Every color can still be changed one by one. */
+export const THEME_PRESETS = [
+  { name: '크림', themeColor: '#C1876B', bgColor: '#F8F5F0', cardColor: '#FFFFFF', textColor: '#2A2622' },
+  { name: '화이트', themeColor: '#3B7BB0', bgColor: '#F3F4F6', cardColor: '#FFFFFF', textColor: '#1F2328' },
+  { name: '벚꽃', themeColor: '#D0688A', bgColor: '#FDF1F4', cardColor: '#FFFFFF', textColor: '#3B2A31' },
+  { name: '미스티블루', themeColor: '#5F82BA', bgColor: '#EEF3FA', cardColor: '#FFFFFF', textColor: '#24304A' },
+  { name: '민트', themeColor: '#2F8F7C', bgColor: '#EDF7F3', cardColor: '#FFFFFF', textColor: '#1F332C' },
+  { name: '라벤더', themeColor: '#7C6BB5', bgColor: '#F4F1FA', cardColor: '#FFFFFF', textColor: '#2C2640' },
+  { name: '다크', themeColor: '#E0A07F', bgColor: '#16171B', cardColor: '#22242A', textColor: '#ECEAE6' },
+  { name: '네이비 다크', themeColor: '#8AB4F8', bgColor: '#101827', cardColor: '#1A2335', textColor: '#E6EAF2' },
+];
+
 export const THEME_COLORS = [
   { name: '테라코타', color: '#C1876B' },
   { name: '세이지', color: '#5E8C6A' },

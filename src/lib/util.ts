@@ -69,3 +69,25 @@ export function hexToRgba(hex: string, alpha: number): string {
   if (Number.isNaN(num)) return `rgba(193,135,107,${alpha})`;
   return `rgba(${(num >> 16) & 255},${(num >> 8) & 255},${num & 255},${alpha})`;
 }
+
+/** Relative luminance (WCAG) of a #rrggbb color, 0 (black) – 1 (white). */
+export function luminance(hex: string): number {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return 1;
+  const n = parseInt(m[1], 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+/** White or near-black, whichever reads better on `bg`. */
+export function readableOn(bg: string): string {
+  return contrastRatio(bg, '#ffffff') >= contrastRatio(bg, '#1f1b18') ? '#ffffff' : '#1f1b18';
+}

@@ -101,7 +101,7 @@ export function TaskSection({ openSheet }: { openSheet: (s: PlanSheetState) => v
   };
 
   const chip = (active: boolean) =>
-    cx('flex flex-none items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold transition', active ? 'border-ink bg-ink text-white' : 'border-line-strong text-ink-soft hover:bg-hover');
+    cx('flex flex-none items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold transition', active ? 'border-ink bg-ink text-card' : 'border-line-strong text-ink-soft hover:bg-hover');
 
   return (
     <div className="space-y-3">
@@ -122,7 +122,7 @@ export function TaskSection({ openSheet }: { openSheet: (s: PlanSheetState) => v
       </div>
 
       {status === 'open' && (
-        <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="기한으로 거르기">
+        <div className="drag-scroll no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="기한으로 거르기">
           {DUE_FILTERS.map((f) => (
             <button key={f.value} type="button" aria-pressed={due === f.value} onClick={() => setDue(f.value)} className={chip(due === f.value)}>
               {f.label}
@@ -131,7 +131,7 @@ export function TaskSection({ openSheet }: { openSheet: (s: PlanSheetState) => v
         </div>
       )}
 
-      <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="카테고리로 거르기">
+      <div className="drag-scroll no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1" role="group" aria-label="카테고리로 거르기">
         <button type="button" aria-pressed={categoryId === null} onClick={() => setCategoryId(null)} className={chip(categoryId === null)}>
           모든 카테고리
         </button>
@@ -139,7 +139,7 @@ export function TaskSection({ openSheet }: { openSheet: (s: PlanSheetState) => v
           <button key={c.id} type="button" aria-pressed={categoryId === c.id} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)} className={chip(categoryId === c.id)}>
             <span className="h-2 w-2 rounded-full" style={{ background: c.color }} />
             {c.name}
-            <span className={cx('tabular', categoryId === c.id ? 'text-white/70' : 'text-muted')}>{c.open}</span>
+            <span className={cx('tabular', categoryId === c.id ? 'opacity-70' : 'text-muted')}>{c.open}</span>
             {c.overdue > 0 && <span className={cx('tabular', categoryId === c.id ? 'text-red-200' : 'text-expense')}>!{c.overdue}</span>}
           </button>
         ))}

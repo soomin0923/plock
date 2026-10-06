@@ -7,12 +7,10 @@ import { cx } from '../lib/util';
 /** Natural-language input. Uses the user's Gemini key when set, otherwise the built-in parser. */
 export function QuickAdd({
   placeholder,
-  examples = [],
   onSubmit,
   className,
 }: {
   placeholder: string;
-  examples?: string[];
   onSubmit: (text: string, useAi: boolean) => Promise<void>;
   className?: string;
 }) {
@@ -22,8 +20,8 @@ export function QuickAdd({
   const [busy, setBusy] = useState(false);
   const [focused, setFocused] = useState(false);
 
-  const submit = async (value = text) => {
-    const v = value.trim();
+  const submit = async () => {
+    const v = text.trim();
     if (!v || busy) return;
     setBusy(true);
     try {
@@ -58,20 +56,11 @@ export function QuickAdd({
           type="submit"
           disabled={!text.trim() || busy}
           aria-label="추가"
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-primary text-white transition disabled:bg-line-strong"
+          className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-primary text-on-primary transition disabled:bg-line-strong"
         >
           {busy ? <Spinner /> : <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.5} />}
         </button>
       </form>
-      {examples.length > 0 && (
-        <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto">
-          {examples.map((ex) => (
-            <button key={ex} type="button" onClick={() => submit(ex)} disabled={busy} className="flex-none rounded-full bg-hover px-3 py-1 text-[13px] text-ink-soft hover:bg-line">
-              {ex}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

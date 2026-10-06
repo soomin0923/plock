@@ -10,8 +10,8 @@ export type Intent =
   | { type: 'ledger-add'; date: string }
   | { type: 'ledger-text'; text: string }
   | { type: 'planner-date'; date: string }
-  | { type: 'planner-section'; section: 'calendar' | 'tasks' | 'habits' | 'sql' }
-  | { type: 'settings-section'; section: 'account' | 'ai' | 'data' | 'sql' | 'look' | 'music' };
+  | { type: 'planner-section'; section: 'calendar' | 'tasks' | 'habits' }
+  | { type: 'settings-section'; section: 'account' | 'ai' | 'data' | 'look' | 'music' };
 
 interface RouterApi {
   tab: Tab;
