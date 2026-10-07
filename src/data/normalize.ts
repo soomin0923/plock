@@ -99,22 +99,7 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
     paper: PAPERS.some((p) => p.id === r.paper) ? (r.paper as DiaryEntry['paper']) : 'plain',
     font: DIARY_FONTS.some((f) => f.id === r.font) ? (r.font as DiaryEntry['font']) : 'sans',
     photos: strArr(r.photos),
-    stickers: Array.isArray(r.stickers)
-      ? (r.stickers as Raw[])
-          .filter((s) => s && typeof s === 'object' && typeof s.value === 'string')
-          .map(
-            (s, i): StickerPlacement => ({
-              id: str(s.id) || `stk_${i}`,
-              kind: s.kind === 'image' ? 'image' : 'emoji',
-              value: str(s.value),
-              x: num(s.x, 50),
-              y: num(s.y, 30),
-              size: num(s.size, 18),
-              rotation: num(s.rotation),
-              z: num(s.z, i + 1),
-            }),
-          )
-      : [],
+    stickers: normalizeStickers(r.stickers),
     journal: normalizeJournal(r.journal),
   }),
 
@@ -158,11 +143,39 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
     monthlyBudget: typeof r.monthlyBudget === 'number' && r.monthlyBudget > 0 ? r.monthlyBudget : undefined,
     weekStartsOn: r.weekStartsOn === 1 ? 1 : 0,
     music: normalizeMusic(r.music),
+    homeStickers:
+      r.homeStickers && typeof r.homeStickers === 'object'
+        ? { wide: normalizeStickers((r.homeStickers as Raw).wide), narrow: normalizeStickers((r.homeStickers as Raw).narrow) }
+        : undefined,
     todayWidgets: Array.isArray(r.todayWidgets)
       ? (r.todayWidgets as Raw[]).filter((w) => w && typeof w.id === 'string').map((w) => ({ id: w.id as string, wide: w.wide === true || undefined }))
       : undefined,
   }),
 };
+
+function normalizeStickers(v: unknown): StickerPlacement[] {
+  if (!Array.isArray(v)) return [];
+  return (v as Raw[])
+    .filter((s) => s && typeof s === 'object' && typeof s.value === 'string')
+    .map(
+      (s, i): StickerPlacement => ({
+        id: str(s.id) || `stk_${i}`,
+        kind: s.kind === 'image' ? 'image' : 'emoji',
+        value: str(s.value),
+        x: num(s.x, 50),
+        y: num(s.y, 30),
+        size: num(s.size, 18),
+        rotation: num(s.rotation),
+        z: num(s.z, i + 1),
+        effect: normalizeFx(s.effect),
+      }),
+    );
+}
+
+const PLACEMENT_FX = ['mono', 'sepia', 'pop', 'outline', '3d', 'neon'];
+export function normalizeFx(v: unknown): StickerPlacement['effect'] {
+  return typeof v === 'string' && PLACEMENT_FX.includes(v) ? (v as StickerPlacement['effect']) : undefined;
+}
 
 function normalizeJournal(v: unknown): MoodJournal | undefined {
   if (!v || typeof v !== 'object') return undefined;

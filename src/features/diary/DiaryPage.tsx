@@ -186,7 +186,7 @@ type Gesture =
   | { kind: 'move'; id: string; startX: number; startY: number; x: number; y: number; unit: number }
   | { kind: 'transform'; id: string; cx: number; cy: number; dist: number; angle: number; size: number; rotation: number };
 
-function StickerLayer({
+export function StickerLayer({
   stickers,
   editable,
   selected,
@@ -291,13 +291,15 @@ function StickerLayer({
             onPointerCancel={end}
             data-sticker={s.id}
           >
-            {s.kind === 'emoji' ? (
-              <span className="sticker-emoji" style={{ fontSize: `${s.size * 0.86}cqw` }}>
-                {s.value}
-              </span>
-            ) : (
-              <StickerImage src={s.value} />
-            )}
+            <span className={cx('sticker-fx', s.effect && `fx-${s.effect}`)}>
+              {s.kind === 'emoji' ? (
+                <span className="sticker-emoji" style={{ fontSize: `${s.size * 0.86}cqw` }}>
+                  {s.value}
+                </span>
+              ) : (
+                <StickerImage src={s.value} />
+              )}
+            </span>
             {isSel && (
               <span
                 className="sticker-handle -bottom-[18px] -right-[18px] cursor-nwse-resize"

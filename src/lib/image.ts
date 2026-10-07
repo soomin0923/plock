@@ -166,6 +166,113 @@ export async function makeSticker(file: Blob, shape: StickerShape): Promise<Blob
   }
 }
 
+// ------------------------------------------------------------------ sticker effects (baked into the image)
+
+export type StickerFx = 'none' | 'mono' | 'sepia' | 'pop' | 'outline' | '3d' | 'neon';
+
+/**
+ * Apply an effect to a finished sticker image. Pixel work is done by hand (no ctx.filter)
+ * so it looks the same in Safari.
+ */
+export async function applyStickerFx(blob: Blob, fx: StickerFx, accent = '#C1876B'): Promise<Blob> {
+  if (fx === 'none') return blob;
+  const img = await decode(blob);
+  try {
+    const w = img.width;
+    const h = img.height;
+    const pad = fx === 'outline' || fx === '3d' || fx === 'neon' ? Math.round(Math.max(w, h) * 0.07) : 0;
+    const canvas = document.createElement('canvas');
+    canvas.width = w + pad * 2;
+    canvas.height = h + pad * 2;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('이미지 처리를 지원하지 않는 브라우저입니다.');
+
+    // Color effects
+    const base = document.createElement('canvas');
+    base.width = w;
+    base.height = h;
+    const bctx = base.getContext('2d', { willReadFrequently: true })!;
+    bctx.drawImage(img.source, 0, 0, w, h);
+    if (fx === 'mono' || fx === 'sepia' || fx === 'pop') {
+      const d = bctx.getImageData(0, 0, w, h);
+      const px = d.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const r = px[i], g = px[i + 1], b = px[i + 2];
+        if (fx === 'mono') {
+          const y = 0.299 * r + 0.587 * g + 0.114 * b;
+          const c = Math.max(0, Math.min(255, (y - 128) * 1.12 + 128));
+          px[i] = px[i + 1] = px[i + 2] = c;
+        } else if (fx === 'sepia') {
+          px[i] = Math.min(255, 0.393 * r + 0.769 * g + 0.189 * b);
+          px[i + 1] = Math.min(255, 0.349 * r + 0.686 * g + 0.168 * b);
+          px[i + 2] = Math.min(255, 0.272 * r + 0.534 * g + 0.131 * b);
+        } else {
+          // pop art: boost saturation, then posterize to 5 levels
+          const avg = (r + g + b) / 3;
+          const sat = (v: number) => Math.max(0, Math.min(255, avg + (v - avg) * 1.9));
+          const post = (v: number) => Math.round(sat(v) / 63.75) * 63.75;
+          px[i] = post(r);
+          px[i + 1] = post(g);
+          px[i + 2] = post(b);
+        }
+      }
+      bctx.putImageData(d, 0, 0);
+    }
+
+    // Shape effects: a silhouette ring around the sticker
+    if (pad) {
+      const ring = Math.max(2, Math.round(pad * (fx === 'neon' ? 0.45 : 0.6)));
+      const sil = document.createElement('canvas');
+      sil.width = canvas.width;
+      sil.height = canvas.height;
+      const sctx = sil.getContext('2d')!;
+      const steps = 24;
+      for (let k = 0; k < steps; k++) {
+        const a = (k / steps) * Math.PI * 2;
+        sctx.drawImage(base, pad + Math.cos(a) * ring, pad + Math.sin(a) * ring);
+      }
+      sctx.globalCompositeOperation = 'source-in';
+      sctx.fillStyle = fx === 'neon' ? accent : '#ffffff';
+      sctx.fillRect(0, 0, sil.width, sil.height);
+
+      ctx.save();
+      if (fx === '3d') {
+        ctx.shadowColor = 'rgba(0,0,0,0.35)';
+        ctx.shadowBlur = pad * 0.5;
+        ctx.shadowOffsetX = pad * 0.18;
+        ctx.shadowOffsetY = pad * 0.35;
+      } else if (fx === 'neon') {
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = pad * 0.8;
+      } else {
+        ctx.shadowColor = 'rgba(0,0,0,0.18)';
+        ctx.shadowBlur = pad * 0.25;
+      }
+      ctx.drawImage(sil, 0, 0);
+      if (fx === 'neon') ctx.drawImage(sil, 0, 0); // stronger glow
+      ctx.restore();
+    }
+    ctx.drawImage(base, pad, pad);
+
+    if (fx === '3d') {
+      // glossy highlight on the upper half + soft shade at the bottom, clipped to the sticker
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      const gl = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gl.addColorStop(0, 'rgba(255,255,255,0.45)');
+      gl.addColorStop(0.45, 'rgba(255,255,255,0.08)');
+      gl.addColorStop(0.5, 'rgba(255,255,255,0)');
+      gl.addColorStop(1, 'rgba(0,0,0,0.16)');
+      ctx.fillStyle = gl;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+    return await compressCanvas(canvas, STICKER_PRESET);
+  } finally {
+    img.close();
+  }
+}
+
 /** Flood-fill from the edges: light pixels connected to the border become transparent. */
 function removeLightBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const data = ctx.getImageData(0, 0, w, h);

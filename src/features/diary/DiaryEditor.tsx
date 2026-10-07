@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ImagePlus, NotebookPen, Palette, Smile, Sticker, Trash2, Wallet, X } from 'lucide-react';
-import type { DiaryEntry, StickerPlacement } from '../../types';
+import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ImagePlus, NotebookPen, Palette, Smile, Sparkles, Sticker, Trash2, Wallet, X } from 'lucide-react';
+import type { DiaryEntry, PlacementFx, StickerPlacement } from '../../types';
 import { useData } from '../../data/DataProvider';
 import { Button, Spinner, useBackToClose, useConfirm } from '../../components/ui';
 import { useToast } from '../../components/Toast';
@@ -11,7 +11,7 @@ import { cx, newId, nowIso, won } from '../../lib/util';
 import { DiaryPage } from './DiaryPage';
 import { blankJournal, journalHasContent, MoodJournalForm } from './MoodJournal';
 import { getDeviceSettings, setDeviceSettings, useDeviceSettings } from '../../lib/deviceSettings';
-import { StickerPicker } from './StickerPicker';
+import { nextEffect, PLACEMENT_EFFECTS, StickerPicker } from './StickerPicker';
 import { StickerMaker } from './StickerMaker';
 
 type Panel = 'sticker' | 'style' | 'mood' | null;
@@ -140,7 +140,7 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
     return Math.max(10, (viewportMid - rect.top) / unit);
   };
 
-  const addSticker = (kind: 'emoji' | 'image', value: string) => {
+  const addSticker = (kind: 'emoji' | 'image', value: string, effect?: PlacementFx) => {
     const z = entry.stickers.reduce((m, s) => Math.max(m, s.z), 0) + 1;
     const s: StickerPlacement = {
       id: newId('stk'),
@@ -151,6 +151,7 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
       size: kind === 'emoji' ? 14 : 30,
       rotation: Math.round(Math.random() * 16 - 8),
       z,
+      effect,
     };
     set({ stickers: [...entry.stickers, s] });
     setSelected(s.id);
@@ -373,6 +374,7 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
                   })
                 }
               />
+              <ToolButton icon={<Sparkles className="h-5 w-5" />} label={`효과 · ${PLACEMENT_EFFECTS.find((e) => e.id === sel.effect)?.label}`} onClick={() => updateSelected((s) => ({ ...s, effect: nextEffect(s.effect) }))} />
               <ToolButton icon={<Trash2 className="h-5 w-5" />} label="삭제" danger onClick={() => (updateSelected((s, all) => all.filter((x) => x.id !== s.id)), setSelected(null))} />
               <div className="flex-1" />
               <Button size="sm" variant="primary" onClick={() => setSelected(null)}>

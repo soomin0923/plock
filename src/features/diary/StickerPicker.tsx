@@ -5,16 +5,49 @@ import { AssetImage } from '../../components/AssetImage';
 import { Segmented, useConfirm } from '../../components/ui';
 import { EMOJI_STICKERS } from '../../data/defaults';
 import { cx } from '../../lib/util';
+import type { PlacementFx } from '../../types';
 
-export function StickerPicker({ onPick, onMake }: { onPick: (kind: 'emoji' | 'image', value: string) => void; onMake: () => void }) {
+export const PLACEMENT_EFFECTS: { id: PlacementFx | undefined; label: string }[] = [
+  { id: undefined, label: '없음' },
+  { id: '3d', label: '3D' },
+  { id: 'outline', label: '흰 테두리' },
+  { id: 'mono', label: '흑백' },
+  { id: 'sepia', label: '빈티지' },
+  { id: 'pop', label: '팝' },
+  { id: 'neon', label: '네온' },
+];
+
+export function nextEffect(fx?: PlacementFx): PlacementFx | undefined {
+  const i = PLACEMENT_EFFECTS.findIndex((e) => e.id === fx);
+  return PLACEMENT_EFFECTS[(i + 1) % PLACEMENT_EFFECTS.length].id;
+}
+
+export function StickerPicker({ onPick, onMake }: { onPick: (kind: 'emoji' | 'image', value: string, effect?: PlacementFx) => void; onMake: () => void }) {
   const { data, remove, releaseImages } = useData();
   const confirm = useConfirm();
   const [tab, setTab] = useState<'mine' | string>(data.stickers.length ? 'mine' : EMOJI_STICKERS[0].group);
   const [manage, setManage] = useState(false);
+  const [fx, setFx] = useState<PlacementFx | undefined>(undefined);
+  const fxClass = cx('sticker-fx', fx && `fx-${fx}`);
   const mine = [...data.stickers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
-    <div>
+    <div className="[container-type:inline-size]">
+      <div className="drag-scroll no-scrollbar -mx-1 mb-2 flex items-center gap-1.5 overflow-x-auto px-1" role="radiogroup" aria-label="붙일 때 효과">
+        <span className="flex-none text-[12px] font-semibold text-muted">효과</span>
+        {PLACEMENT_EFFECTS.map((e) => (
+          <button
+            key={e.label}
+            type="button"
+            role="radio"
+            aria-checked={fx === e.id}
+            onClick={() => setFx(e.id)}
+            className={cx('flex-none rounded-full border px-2.5 py-1 text-[12px] font-semibold transition', fx === e.id ? 'border-primary bg-primary-soft text-primary' : 'border-line-strong text-ink-soft hover:bg-hover')}
+          >
+            {e.label}
+          </button>
+        ))}
+      </div>
       <div className="drag-scroll no-scrollbar -mx-1 mb-3 overflow-x-auto px-1">
         <Segmented
           size="sm"
@@ -33,11 +66,13 @@ export function StickerPicker({ onPick, onMake }: { onPick: (kind: 'emoji' | 'im
             {mine.map((s) => (
               <div key={s.id} className="relative">
                 <button
-                  onClick={() => !manage && onPick('image', s.src)}
+                  onClick={() => !manage && onPick('image', s.src, fx)}
                   title={s.name}
                   className={cx('flex aspect-square w-full items-center justify-center rounded-2xl bg-hover/70 p-1.5 transition hover:bg-hover', manage && 'opacity-60')}
                 >
-                  <AssetImage src={s.src} className="h-full w-full" imgClassName="object-contain" />
+                  <span className={cx(fxClass, 'h-full w-full')}>
+                    <AssetImage src={s.src} className="h-full w-full" imgClassName="object-contain" />
+                  </span>
                 </button>
                 {manage && (
                   <button
@@ -66,8 +101,8 @@ export function StickerPicker({ onPick, onMake }: { onPick: (kind: 'emoji' | 'im
       ) : (
         <div className="grid grid-cols-8 gap-1">
           {EMOJI_STICKERS.find((g) => g.group === tab)?.items.map((em) => (
-            <button key={em} onClick={() => onPick('emoji', em)} className="flex aspect-square items-center justify-center rounded-xl text-[28px] transition hover:bg-hover active:scale-90">
-              {em}
+            <button key={em} onClick={() => onPick('emoji', em, fx)} className="flex aspect-square items-center justify-center rounded-xl text-[28px] transition hover:bg-hover active:scale-90">
+              <span className={fxClass}>{em}</span>
             </button>
           ))}
         </div>

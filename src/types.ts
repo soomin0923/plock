@@ -74,7 +74,11 @@ export interface StickerPlacement {
   size: number; // width in page-width units
   rotation: number; // degrees
   z: number;
+  /** Look applied when placed (CSS), works for emoji and images alike. */
+  effect?: PlacementFx;
 }
+
+export type PlacementFx = 'mono' | 'sepia' | 'pop' | 'outline' | '3d' | 'neon';
 
 export interface DiaryEntry extends BaseRecord {
   date: string; // YYYY-MM-DD
@@ -168,6 +172,8 @@ export interface Prefs extends BaseRecord {
   monthlyBudget?: number;
   weekStartsOn: 0 | 1;
   music?: MusicTrack[];
+  /** Stickers on the 오늘 page; PC and phone layouts differ, so each has its own set. */
+  homeStickers?: { wide: StickerPlacement[]; narrow: StickerPlacement[] };
   /** 오늘 page widgets, in display order. Absent = default layout. */
   todayWidgets?: TodayWidget[];
 }

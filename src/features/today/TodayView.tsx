@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowDown, ArrowRight, ArrowUp, BookHeart, CalendarDays, Cloud, GripVertical, LayoutGrid, Maximize2, Minimize2, Pause, PenLine, Play, Plus, SkipBack, SkipForward, Star, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, BookHeart, CalendarDays, Cloud, GripVertical, LayoutGrid, Maximize2, Minimize2, Pause, PenLine, Play, Plus, SkipBack, SkipForward, Star, Sticker as StickerIcon, X } from 'lucide-react';
 import type { TodayWidget } from '../../types';
 import { useData } from '../../data/DataProvider';
 import { useRouter } from '../../app/router';
@@ -21,6 +21,7 @@ import { blankNote } from '../dump/DumpView';
 import { useMusic } from '../music/MusicProvider';
 import { Vinyl } from '../music/MusicWidgets';
 import { MOODS } from '../../data/defaults';
+import { StickerBoard } from './HomeStickers';
 
 function greeting() {
   const h = new Date().getHours();
@@ -69,6 +70,7 @@ export function TodayView() {
   const openAuth = useOpenAuth();
   const [sheet, setSheet] = useState<PlanSheetState>(null);
   const [editing, setEditing] = useState(false);
+  const [stickering, setStickering] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const d0 = today();
@@ -96,7 +98,7 @@ export function TodayView() {
   };
 
   return (
-    <div>
+    <StickerBoard active={stickering} onExit={() => setStickering(false)}>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-primary">{formatKoreanDate(d0, { year: true })}</p>
@@ -105,9 +107,16 @@ export function TodayView() {
             {name && <span className="text-ink-soft">, {name}님</span>}
           </h2>
         </div>
-        <Button size="sm" variant={editing ? 'primary' : 'ghost'} icon={editing ? undefined : <LayoutGrid className="h-4 w-4" />} onClick={() => setEditing((v) => !v)}>
-          {editing ? '완료' : '위젯 편집'}
-        </Button>
+        <div className="flex gap-1">
+          {!editing && (
+            <Button size="sm" variant="ghost" icon={<StickerIcon className="h-4 w-4" />} onClick={() => setStickering(true)}>
+              스티커
+            </Button>
+          )}
+          <Button size="sm" variant={editing ? 'primary' : 'ghost'} icon={editing ? undefined : <LayoutGrid className="h-4 w-4" />} onClick={() => setEditing((v) => !v)}>
+            {editing ? '완료' : '위젯 편집'}
+          </Button>
+        </div>
       </div>
 
       {!user && !editing && (
@@ -214,7 +223,7 @@ export function TodayView() {
       </div>
 
       <PlanSheet state={sheet} onClose={() => setSheet(null)} />
-    </div>
+    </StickerBoard>
   );
 }
 

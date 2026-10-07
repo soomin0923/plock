@@ -236,6 +236,29 @@ button:disabled {
   pointer-events: none;
   filter: drop-shadow(0 0.4cqw 0.8cqw rgb(0 0 0 / 0.18));
 }
+/* Per-sticker effects (StickerPlacement.effect) */
+.sticker-fx {
+  display: block;
+}
+.fx-mono {
+  filter: grayscale(1) contrast(1.05);
+}
+.fx-sepia {
+  filter: sepia(0.85) saturate(1.15);
+}
+.fx-pop {
+  filter: saturate(1.9) contrast(1.25);
+}
+.fx-outline {
+  filter: drop-shadow(0.5cqw 0 0 #fff) drop-shadow(-0.5cqw 0 0 #fff) drop-shadow(0 0.5cqw 0 #fff) drop-shadow(0 -0.5cqw 0 #fff) drop-shadow(0 0.2cqw 0.4cqw rgb(0 0 0 / 0.25));
+}
+.fx-3d {
+  filter: drop-shadow(0.5cqw 0 0 #fff) drop-shadow(-0.5cqw 0 0 #fff) drop-shadow(0 0.5cqw 0 #fff) drop-shadow(0 -0.5cqw 0 #fff) drop-shadow(0.6cqw 1.2cqw 0.8cqw rgb(0 0 0 / 0.38));
+  transform: perspective(40cqw) rotateX(8deg);
+}
+.fx-neon {
+  filter: drop-shadow(0 0 0.6cqw var(--color-primary)) drop-shadow(0 0 1.2cqw var(--color-primary)) drop-shadow(0 0 2.4cqw var(--color-primary));
+}
 .sticker-selected {
   outline: 2px dashed var(--color-primary);
   outline-offset: 4px;
