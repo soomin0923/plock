@@ -16,10 +16,12 @@ HAVING COUNT(*) > 1
 ORDER BY n DESC, start_date;
 
 -- A2. 중복이 몇 행인지 (지우면 몇 건이 남는지)
-SELECT COUNT(*) AS total_rows,
-       COUNT(DISTINCT title, start_date, start_time) AS distinct_rows,
-       COUNT(*) - COUNT(DISTINCT title, start_date, start_time) AS duplicate_rows
-FROM events;
+--     주의: COUNT(DISTINCT a, b, c)는 NULL이 하나라도 있는 행(종일 일정의 start_time)을 세지 않아
+--     중복이 부풀려집니다. GROUP BY는 NULL끼리 같은 묶음으로 보므로 묶음 수를 세는 방식으로 계산합니다.
+SELECT (SELECT COUNT(*) FROM events) AS total_rows,
+       COUNT(*) AS distinct_rows,
+       (SELECT COUNT(*) FROM events) - COUNT(*) AS duplicate_rows
+FROM (SELECT 1 FROM events GROUP BY title, start_date, start_time) g;
 
 -- A3. 가져오기 배치 추정: 같은 분(minute)에 만들어진 일정 묶음
 SELECT DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS batch_minute, COUNT(*) AS n
