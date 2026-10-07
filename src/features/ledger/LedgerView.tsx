@@ -10,9 +10,10 @@ import { QuickAdd } from '../../components/QuickAdd';
 import { AssetImage } from '../../components/AssetImage';
 import { useToast } from '../../components/Toast';
 import { getDeviceSettings } from '../../lib/deviceSettings';
+import { finishParseLog, ledgerFields, startParseLog } from '../../lib/parseLog';
 import { addMonths, diffDays, endOfMonth, formatKoreanDate, monthKey, today } from '../../lib/date';
 import { compactWon, cx, downloadBlob, won } from '../../lib/util';
-import { aiParseLedger, aiReadReceipt, hasGeminiKey } from '../../lib/gemini';
+import { aiParseLedger, aiReadReceipt, hasGeminiKey, lastModelUsed } from '../../lib/gemini';
 import { localParseLedger, type LedgerDraft } from '../../lib/nlParser';
 import { compressImage, RECEIPT_PRESET } from '../../lib/image';
 import { PAY_METHODS } from '../../data/defaults';
@@ -32,7 +33,7 @@ export function LedgerView() {
   const [tab, setTab] = useState<Tab>('list');
   const [dayFilter, setDayFilter] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ entry: LedgerEntry; isNew: boolean } | null>(null);
-  const [drafts, setDrafts] = useState<{ items: LedgerDraft[]; receipt?: string; source: 'ai' | 'local' } | null>(null);
+  const [drafts, setDrafts] = useState<{ items: LedgerDraft[]; receipt?: string; source: 'ai' | 'local'; logId?: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const receiptInput = useRef<HTMLInputElement>(null);
@@ -56,20 +57,34 @@ export function LedgerView() {
     const d = monthKey(month) === monthKey(today()) ? today() : month;
     let items: LedgerDraft[] = [];
     let source: 'ai' | 'local' = 'local';
+    let error: string | undefined;
+    const t0 = performance.now();
     if (useAi) {
       try {
         items = await aiParseLedger(text, d, data.ledgerCategories);
         source = 'ai';
       } catch (e) {
-        toast(`AI 분석 실패: ${(e as Error).message} (기본 분석으로 대신했어요)`, 'error');
+        error = (e as Error).message;
+        toast(`AI 분석 실패: ${error} (기본 분석으로 대신했어요)`, 'error');
       }
     }
     if (!items.length) items = localParseLedger(text, d, data.ledgerCategories);
+    const logId = startParseLog({
+      surface: 'ledger',
+      task: 'ledger',
+      input: text,
+      mode: source === 'ai' ? 'ai' : error ? 'local_fallback' : 'local',
+      model: source === 'ai' ? lastModelUsed() : undefined,
+      latencyMs: Math.round(performance.now() - t0),
+      error,
+      predicted: ledgerFields(items),
+    });
     if (!items.length) {
+      finishParseLog(logId, 'cancelled');
       toast('금액을 찾지 못했어요. 예: "점심 김밥 4500원"', 'info');
       return;
     }
-    setDrafts({ items, source });
+    setDrafts({ items, source, logId });
   };
 
   const onReceipt = async (file?: File) => {

@@ -39,7 +39,7 @@ export function PlannerView() {
   });
 
   const onQuick = async (text: string, useAi: boolean) => {
-    const draft = await parsePlanInput(text, useAi, data.categories, (m) => toast(m, 'error'));
+    const draft = await parsePlanInput(text, useAi, data.categories, (m) => toast(m, 'error'), 'planner');
     setSheet({ mode: 'new', kind: draft.kind, date: draft.startDate, draft });
   };
 

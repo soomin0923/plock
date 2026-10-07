@@ -14,6 +14,7 @@ import { cx, newId, nowIso, won } from '../../lib/util';
 import { categoryOf, sortCategories } from '../planner/helpers';
 import { blankEvent, blankTask, CategoryPicker } from '../planner/forms';
 import { parsePlanInput } from '../planner/rows';
+import { finishParseLog, ledgerFields, planFields, recordFields, startParseLog } from '../../lib/parseLog';
 import { ledgerCategoryOf } from '../ledger/helpers';
 
 // 쏟아내기: type one line and press Enter. Everything is saved as you go —
@@ -111,15 +112,18 @@ export function DumpView() {
   };
 
   const addPlan = (p: PlanDraft) => {
+    const logId = startParseLog({ surface: 'dump_chip', task: 'plan', input: draft.text.trim(), mode: 'local', latencyMs: 0, predicted: planFields(p) });
     const categoryId = draft.categoryId || p.categoryId;
     if (p.kind === 'event') {
       const ev = blankEvent(p.startDate, data.categories, { title: p.title, endDate: p.endDate, startTime: p.startTime, endTime: p.endTime, categoryId });
       upsert('events', ev);
-      toast(`${formatKoreanDate(p.startDate)} 일정에 넣었어요.`, 'success', { label: '되돌리기', onClick: () => remove('events', ev.id) });
+      finishParseLog(logId, 'saved', recordFields('event', ev), [ev.id]);
+      toast(`${formatKoreanDate(p.startDate)} 일정에 넣었어요.`, 'success', { label: '되돌리기', onClick: () => (remove('events', ev.id), finishParseLog(logId, 'undone')) });
     } else {
       const task = blankTask({ title: p.title, dueDate: p.dueDate, dueTime: p.dueTime, priority: p.priority, categoryId: draft.categoryId || (p.categoryId !== 'cat_etc' ? p.categoryId : undefined) });
       upsert('tasks', task);
-      toast('할 일에 넣었어요.', 'success', { label: '되돌리기', onClick: () => remove('tasks', task.id) });
+      finishParseLog(logId, 'saved', recordFields('task', task), [task.id]);
+      toast('할 일에 넣었어요.', 'success', { label: '되돌리기', onClick: () => (remove('tasks', task.id), finishParseLog(logId, 'undone')) });
     }
     resetDraft();
   };
@@ -127,8 +131,10 @@ export function DumpView() {
   const addLedger = () => {
     const now = nowIso();
     const entries: LedgerEntry[] = ledger.map((l) => ({ id: newId('led'), date: l.date, type: l.type, amount: l.amount, categoryId: l.categoryId, method: l.method, memo: l.memo || undefined, createdAt: now, updatedAt: now }));
+    const logId = startParseLog({ surface: 'dump_chip', task: 'ledger', input: draft.text.trim(), mode: 'local', latencyMs: 0, predicted: ledgerFields(ledger) });
     upsert('ledger', entries);
-    toast(`가계부에 ${entries.length}건 기록했어요.`, 'success', { label: '되돌리기', onClick: () => remove('ledger', entries.map((e) => e.id)) });
+    finishParseLog(logId, 'saved', ledgerFields(entries), entries.map((e) => e.id));
+    toast(`가계부에 ${entries.length}건 기록했어요.`, 'success', { label: '되돌리기', onClick: () => (remove('ledger', entries.map((e) => e.id)), finishParseLog(logId, 'undone')) });
     resetDraft();
   };
 
@@ -398,7 +404,7 @@ function NoteSheet({ note, onClose, onGoLedger }: { note: Note | null; onClose: 
     if (!n) return;
     setBusy(true);
     try {
-      const p = await parsePlanInput(n.text, !!geminiKey.trim(), data.categories, (m) => toast(m, 'error'));
+      const p = await parsePlanInput(n.text, !!geminiKey.trim(), data.categories, (m) => toast(m, 'error'), 'dump_convert');
       const memo = [n.memo, n.link].filter(Boolean).join('\n') || undefined;
       if (kind === 'event') {
         const date = p.kind === 'event' ? p.startDate : p.dueDate || n.dueDate || today();
@@ -412,9 +418,12 @@ function NoteSheet({ note, onClose, onGoLedger }: { note: Note | null; onClose: 
           photos: n.photos,
         });
         upsert('events', ev);
+        finishParseLog(p.logId, 'saved', recordFields('event', ev), [ev.id]);
         toast(`${formatKoreanDate(date)} 일정으로 옮겼어요.`);
       } else {
-        upsert('tasks', blankTask({ title: p.title || n.text, dueDate: p.dueDate || (p.kind === 'event' ? p.startDate : undefined) || n.dueDate, dueTime: p.dueTime || p.startTime, priority: p.priority, categoryId: n.categoryId, memo }));
+        const task = blankTask({ title: p.title || n.text, dueDate: p.dueDate || (p.kind === 'event' ? p.startDate : undefined) || n.dueDate, dueTime: p.dueTime || p.startTime, priority: p.priority, categoryId: n.categoryId, memo });
+        upsert('tasks', task);
+        finishParseLog(p.logId, 'saved', recordFields('task', task), [task.id]);
         toast('할 일로 옮겼어요.');
       }
       clearTimeout(timer.current);

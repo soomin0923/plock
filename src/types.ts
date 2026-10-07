@@ -184,6 +184,46 @@ export interface TodayWidget {
   wide?: boolean;
 }
 
+// ---- Parser evaluation log (write-only; never shown in the app, exported from the console)
+// One row per natural-language input: what was typed, what the parser predicted, and what the
+// user finally saved. `final` is the ground truth label; `changed` lists the fields the user fixed.
+
+export type ParseSurface = 'today' | 'planner' | 'dump_chip' | 'dump_convert' | 'ledger';
+export type ParseOutcome = 'pending' | 'saved' | 'cancelled' | 'undone';
+
+export interface ParseFields {
+  kind?: string;
+  title?: string;
+  date?: string;
+  endDate?: string;
+  startTime?: string;
+  endTime?: string;
+  categoryId?: string;
+  priority?: string;
+  /** Ledger only: one entry per amount found. */
+  entries?: { type: string; amount: number; categoryId: string; date: string; memo?: string }[];
+}
+
+export interface ParseLog extends BaseRecord {
+  surface: ParseSurface;
+  task: 'plan' | 'ledger';
+  input: string;
+  refDate: string; // the day the input was typed (relative dates resolve against it)
+  refTime: string; // HH:mm
+  timezone: string;
+  weekday: number; // 0 = Sun
+  mode: 'ai' | 'local' | 'local_fallback';
+  model?: string;
+  latencyMs: number;
+  error?: string;
+  predicted: ParseFields;
+  outcome: ParseOutcome;
+  final?: ParseFields;
+  changed?: string[];
+  recordIds?: string[];
+  appVersion: string;
+}
+
 export interface CollectionMap {
   categories: Category;
   events: PlannerEvent;
@@ -195,10 +235,12 @@ export interface CollectionMap {
   ledgerCategories: LedgerCategory;
   notes: Note;
   prefs: Prefs;
+  parseLogs: ParseLog;
 }
 
 export type CollectionName = keyof CollectionMap;
 
+/** Collections loaded into the app. `parseLogs` is deliberately not here: it is write-only. */
 export const COLLECTIONS: CollectionName[] = [
   'categories',
   'events',

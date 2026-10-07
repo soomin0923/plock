@@ -17,6 +17,8 @@ export interface PlanDraft {
   categoryId: string;
   memo?: string;
   source: 'ai' | 'local';
+  /** Parse-log row for this draft (see lib/parseLog.ts). */
+  logId?: string;
 }
 
 export interface LedgerDraft {

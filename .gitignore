@@ -8,3 +8,10 @@ coverage/
 .env*
 !.env.example
 !.env.emulator
+
+# Personal data exports (never commit)
+plock-*.sql
+plock-parse-logs-*
+plock-backup-*.json
+*backup*.json
+exports/

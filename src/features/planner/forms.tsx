@@ -4,6 +4,7 @@ import type { Category, Habit, PlannerEvent, Priority, Subtask, Task } from '../
 import { useData } from '../../data/DataProvider';
 import { Button, Checkbox, Field, Segmented, Sheet, TextArea, TextInput, Toggle, useConfirm } from '../../components/ui';
 import { PhotoPicker } from '../../components/PhotoPicker';
+import { finishParseLog, recordFields } from '../../lib/parseLog';
 import { useToast } from '../../components/Toast';
 import { addDays, addMinutesHm, orderedWeekdays, today, weekday, WEEKDAYS_KR } from '../../lib/date';
 import { newId, nowIso, cx } from '../../lib/util';
@@ -58,7 +59,7 @@ function FormActions({ onCancel, onDelete, saveLabel = '저장', disabled }: { o
 
 // ------------------------------------------------------------------ Event
 
-export function EventForm({ initial, isNew, onDone }: { initial: PlannerEvent; isNew: boolean; onDone: () => void }) {
+export function EventForm({ initial, isNew, onDone }: { initial: PlannerEvent; isNew: boolean; onDone: (saved?: PlannerEvent) => void }) {
   const { upsert, remove, releaseImages } = useData();
   const confirm = useConfirm();
   const toast = useToast();
@@ -82,7 +83,7 @@ export function EventForm({ initial, isNew, onDone }: { initial: PlannerEvent; i
     upsert('events', next);
     releaseImages([...(initial.photos || []), ...added.current], { col: 'events', id: next.id, next });
     toast(isNew ? '일정을 추가했어요.' : '일정을 수정했어요.');
-    onDone();
+    onDone(next);
   };
 
   const del = async () => {
@@ -135,7 +136,7 @@ export function EventForm({ initial, isNew, onDone }: { initial: PlannerEvent; i
 
 // ------------------------------------------------------------------ Task
 
-export function TaskForm({ initial, isNew, onDone }: { initial: Task; isNew: boolean; onDone: () => void }) {
+export function TaskForm({ initial, isNew, onDone }: { initial: Task; isNew: boolean; onDone: (saved?: Task) => void }) {
   const { upsert, remove } = useData();
   const confirm = useConfirm();
   const toast = useToast();
@@ -160,9 +161,10 @@ export function TaskForm({ initial, isNew, onDone }: { initial: Task; isNew: boo
   const save = (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!t.title.trim()) return;
-    upsert('tasks', { ...t, title: t.title.trim(), dueTime: t.dueDate ? t.dueTime : undefined, doneAt: t.done ? t.doneAt || nowIso() : undefined });
+    const next: Task = { ...t, title: t.title.trim(), dueTime: t.dueDate ? t.dueTime : undefined, doneAt: t.done ? t.doneAt || nowIso() : undefined };
+    upsert('tasks', next);
     toast(isNew ? '할 일을 추가했어요.' : '할 일을 수정했어요.');
-    onDone();
+    onDone(next);
   };
 
   const del = async () => {
@@ -234,7 +236,7 @@ export function TaskForm({ initial, isNew, onDone }: { initial: Task; isNew: boo
         <TextArea rows={3} value={t.memo || ''} onChange={(x) => set({ memo: x.target.value })} placeholder="선택" />
       </Field>
       {!isNew && <Toggle checked={t.done} onChange={(done) => set({ done })} label="완료" />}
-      <FormActions onCancel={onDone} onDelete={isNew ? undefined : del} saveLabel={isNew ? '추가' : '저장'} />
+      <FormActions onCancel={() => onDone()} onDelete={isNew ? undefined : del} saveLabel={isNew ? '추가' : '저장'} />
     </form>
   );
 }
@@ -243,7 +245,7 @@ export function TaskForm({ initial, isNew, onDone }: { initial: Task; isNew: boo
 
 const HABIT_ICONS = ['🌱', '💧', '🏃', '📖', '🧘', '💪', '🥗', '😴', '✍️', '🎸', '💊', '🧹', '🇺🇸', '💻', '🚶', '☀️', '🙏', '📵'];
 
-export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: boolean; onDone: () => void }) {
+export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: boolean; onDone: (saved?: Habit) => void }) {
   const { upsert, remove, prefs } = useData();
   const confirm = useConfirm();
   const toast = useToast();
@@ -257,9 +259,10 @@ export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: b
   const save = (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!h.title.trim()) return;
-    upsert('habits', { ...h, title: h.title.trim() });
+    const next: Habit = { ...h, title: h.title.trim() };
+    upsert('habits', next);
     toast(isNew ? '습관을 추가했어요.' : '습관을 수정했어요.');
-    onDone();
+    onDone(next);
   };
   const del = async () => {
     if (!(await confirm({ title: '습관을 삭제할까요?', message: '체크 기록도 함께 삭제됩니다.', confirmLabel: '삭제', danger: true }))) return;
@@ -303,7 +306,7 @@ export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: b
       <Field label="카테고리">
         <CategoryPicker value={h.categoryId} onChange={(categoryId) => set({ categoryId })} allowNone />
       </Field>
-      <FormActions onCancel={onDone} onDelete={isNew ? undefined : del} saveLabel={isNew ? '추가' : '저장'} />
+      <FormActions onCancel={() => onDone()} onDelete={isNew ? undefined : del} saveLabel={isNew ? '추가' : '저장'} />
     </form>
   );
 }
@@ -344,6 +347,13 @@ export function PlanSheet({ state, onClose }: { state: PlanSheetState; onClose: 
     if (state?.mode === 'new') setKind(state.kind);
   }
 
+  // Close the sheet and record what happened to a parsed draft (saved as-is / edited / cancelled).
+  const logId = state?.mode === 'new' ? state.draft?.logId : undefined;
+  const done = (saved?: PlannerEvent | Task | Habit) => {
+    if (logId) finishParseLog(logId, saved ? 'saved' : 'cancelled', saved ? recordFields(kind, saved) : undefined, saved ? [saved.id] : undefined);
+    onClose();
+  };
+
   let body: React.ReactNode = null;
   let title = '';
   if (state?.mode === 'new') {
@@ -354,7 +364,7 @@ export function PlanSheet({ state, onClose }: { state: PlanSheetState; onClose: 
         <EventForm
           key={key + kind}
           isNew
-          onDone={onClose}
+          onDone={done}
           initial={blankEvent(state.date, data.categories, d ? { title: d.title, startDate: d.startDate, endDate: d.endDate, startTime: d.startTime, endTime: d.endTime, categoryId: d.categoryId, memo: d.memo } : {})}
         />
       );
@@ -363,11 +373,11 @@ export function PlanSheet({ state, onClose }: { state: PlanSheetState; onClose: 
         <TaskForm
           key={key + kind}
           isNew
-          onDone={onClose}
+          onDone={done}
           initial={blankTask(d ? { title: d.title, dueDate: d.dueDate ?? d.startDate, dueTime: d.dueTime ?? d.startTime, priority: d.priority, categoryId: d.categoryId, memo: d.memo } : { dueDate: state.date })}
         />
       );
-    else body = <HabitForm key={key + kind} isNew onDone={onClose} initial={blankHabit(data.habits.length, d ? { title: d.title, days: d.days, categoryId: d.categoryId } : {})} />;
+    else body = <HabitForm key={key + kind} isNew onDone={done} initial={blankHabit(data.habits.length, d ? { title: d.title, days: d.days, categoryId: d.categoryId } : {})} />;
   } else if (state?.mode === 'edit-event') {
     title = '일정';
     body = <EventForm key={key} isNew={false} initial={state.item} onDone={onClose} />;
@@ -380,7 +390,7 @@ export function PlanSheet({ state, onClose }: { state: PlanSheetState; onClose: 
   }
 
   return (
-    <Sheet open={!!state} onClose={onClose} title={title}>
+    <Sheet open={!!state} onClose={() => done()} title={title}>
       {state?.mode === 'new' && (
         <>
           {state.draft && (

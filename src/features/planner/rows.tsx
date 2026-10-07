@@ -1,9 +1,10 @@
 import React from 'react';
 import { Flame, ImageIcon, ListChecks, MapPin } from 'lucide-react';
-import type { Category, Habit, PlannerEvent, Task } from '../../types';
+import type { Category, Habit, ParseSurface, PlannerEvent, Task } from '../../types';
 import { Checkbox } from '../../components/ui';
 import { cx } from '../../lib/util';
-import { aiParsePlan } from '../../lib/gemini';
+import { aiParsePlan, lastModelUsed } from '../../lib/gemini';
+import { planFields, startParseLog } from '../../lib/parseLog';
 import { localParsePlan, type PlanDraft } from '../../lib/nlParser';
 import { today } from '../../lib/date';
 import { categoryOf, dueLabel, eventTimeLabel, habitDaysLabel, habitStreak, PRIORITY_META } from './helpers';
@@ -93,15 +94,22 @@ export function HabitRow({ h, date, onToggle, onClick, compact }: { h: Habit; da
   );
 }
 
-/** Parse a natural-language planner input with Gemini (if a key is set) or the local parser. */
-export async function parsePlanInput(text: string, useAi: boolean, cats: Category[], onAiError: (msg: string) => void): Promise<PlanDraft> {
+/** Parse a natural-language planner input with Gemini (if a key is set) or the local parser. Every parse is logged. */
+export async function parsePlanInput(text: string, useAi: boolean, cats: Category[], onAiError: (msg: string) => void, surface: ParseSurface = 'planner'): Promise<PlanDraft> {
   const d = today();
+  const t0 = performance.now();
+  let error: string | undefined;
   if (useAi) {
     try {
-      return await aiParsePlan(text, d, cats);
+      const draft = await aiParsePlan(text, d, cats);
+      const logId = startParseLog({ surface, task: 'plan', input: text, mode: 'ai', model: lastModelUsed(), latencyMs: Math.round(performance.now() - t0), predicted: planFields(draft) });
+      return { ...draft, logId };
     } catch (e) {
-      onAiError(`AI 분석 실패: ${(e as Error).message} (기본 분석으로 대신했어요)`);
+      error = (e as Error).message;
+      onAiError(`AI 분석 실패: ${error} (기본 분석으로 대신했어요)`);
     }
   }
-  return localParsePlan(text, d, cats);
+  const draft = localParsePlan(text, d, cats);
+  const logId = startParseLog({ surface, task: 'plan', input: text, mode: error ? 'local_fallback' : 'local', latencyMs: Math.round(performance.now() - t0), error, predicted: planFields(draft) });
+  return { ...draft, logId };
 }

@@ -7,7 +7,11 @@ import { compressImage, type ImagePreset } from '../lib/image';
 import { newId, nowIso } from '../lib/util';
 import { LocalRepo } from './localRepo';
 import { assetIdOf, collectAssetRefs, isAssetRef, toAssetRef, type Repo, type SyncState } from './repo';
-import { DEFAULT_CATEGORIES, DEFAULT_LEDGER_CATEGORIES, DEFAULT_PREFS } from './defaults';
+import { DEFAULT_CATEGORIES, DEFAULT_LEDGER_CATEGORIES, DEFAULT_PREFS, LEGACY_CATEGORIES } from './defaults';
+import { buildParseLogCsv, buildParseLogJsonl, buildSqlDump } from './exportData';
+import { setParseLogSink } from '../lib/parseLog';
+import { downloadBlob } from '../lib/util';
+import { today } from '../lib/date';
 import { normalizeList } from './normalize';
 import { buildBackup, countRecords, type ImportBundle, type RecordsByCollection } from './bundle';
 
@@ -52,6 +56,27 @@ export interface DataApi {
 }
 
 const DataContext = createContext<DataApi | null>(null);
+
+/** One authoritative read of a collection that the app does not keep loaded (parse logs). */
+function readOnce<K extends CollectionName>(repo: Repo, col: K): Promise<CollectionMap[K][]> {
+  return new Promise((resolve) => {
+    let off: (() => void) | null = null;
+    let done = false;
+    const finish = (items: CollectionMap[K][]) => {
+      if (done) return;
+      done = true;
+      setTimeout(() => off?.());
+      resolve(normalizeList(col, items as unknown[]) as CollectionMap[K][]);
+    };
+    let last: CollectionMap[K][] = [];
+    off = repo.subscribe(col, (items, info) => {
+      last = items;
+      if (info.authoritative) finish(items);
+    });
+    // Offline: settle for what the local cache has.
+    setTimeout(() => finish(last), 8000);
+  });
+}
 
 export function useData(): DataApi {
   const ctx = useContext(DataContext);
@@ -152,6 +177,70 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     };
   }, [repo, toast]);
 
+  const loaded = forceLoaded || COLLECTIONS.every((c) => readyCols.has(c));
+
+  // 3b) Parse log: written straight to storage, never loaded into the app state.
+  useEffect(() => {
+    if (!repo) return;
+    setParseLogSink((log) => {
+      repo.put('parseLogs', [log]).catch(() => {});
+    });
+    return () => setParseLogSink(null);
+  }, [repo]);
+
+  // 3c) Repair: items imported from the previous app can point at its built-in categories
+  //     ('work', 'routine', …), which were never stored. Recreate the missing ones once.
+  const repairedFor = useRef<Repo | null>(null);
+  useEffect(() => {
+    if (!repo || !loaded || repairedFor.current === repo || !readyCols.has('categories')) return;
+    repairedFor.current = repo;
+    const known = new Set(data.categories.map((c) => c.id));
+    const used = new Set<string>([...data.events, ...data.tasks, ...data.habits, ...data.notes].map((x) => x.categoryId || '').filter(Boolean));
+    const now = nowIso();
+    const add = LEGACY_CATEGORIES.filter((c) => used.has(c.id) && !known.has(c.id)).map((c, i) => ({ ...c, order: 100 + i, createdAt: now, updatedAt: now }));
+    if (add.length) repo.put('categories', add).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo, loaded]);
+
+  // 3d) Research exports from the browser console (no UI): `plock.help()`
+  useEffect(() => {
+    if (!repo || !loaded) return;
+    const stamp = () => today().replace(/-/g, '');
+    const api = {
+      help() {
+        console.info(
+          [
+            'plock.exportSql()        → plock-YYYYMMDD.sql  (MySQL: categories, events, tasks, ledger_categories, ledger, notes, parse_logs)',
+            'plock.exportParseLogs()  → parse log as .csv + .jsonl (입력 문장 → 파서 예측 → 실제 저장값)',
+            'plock.parseLogCount()    → number of parse-log rows',
+            '일기·사진·스티커는 내보내지 않아요.',
+          ].join('\n'),
+        );
+      },
+      async parseLogCount() {
+        return (await readOnce(repo, 'parseLogs')).length;
+      },
+      async exportSql() {
+        const d = dataRef.current;
+        const parseLogs = await readOnce(repo, 'parseLogs');
+        const sql = buildSqlDump({ categories: d.categories, events: d.events, tasks: d.tasks, ledgerCategories: d.ledgerCategories, ledger: d.ledger, notes: d.notes, parseLogs });
+        downloadBlob(new Blob([sql], { type: 'application/sql;charset=utf-8' }), `plock-${stamp()}.sql`);
+        return { events: d.events.length, tasks: d.tasks.length, ledger: d.ledger.length, notes: d.notes.length, parseLogs: parseLogs.length };
+      },
+      async exportParseLogs() {
+        const logs = (await readOnce(repo, 'parseLogs')).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        downloadBlob(new Blob([buildParseLogCsv(logs)], { type: 'text/csv;charset=utf-8' }), `plock-parse-logs-${stamp()}.csv`);
+        await new Promise((r) => setTimeout(r, 400));
+        downloadBlob(new Blob([buildParseLogJsonl(logs)], { type: 'application/x-ndjson;charset=utf-8' }), `plock-parse-logs-${stamp()}.jsonl`);
+        return logs.length;
+      },
+    };
+    (window as unknown as { plock?: typeof api }).plock = api;
+    return () => {
+      delete (window as unknown as { plock?: typeof api }).plock;
+    };
+  }, [repo, loaded]);
+
   // 4) Offer to move guest data into the account after signing in
   useEffect(() => {
     if (!user) {
@@ -170,8 +259,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [user?.uid]);
-
-  const loaded = forceLoaded || COLLECTIONS.every((c) => readyCols.has(c));
 
   const upsert = useCallback(<K extends CollectionName>(col: K, items: CollectionMap[K] | CollectionMap[K][]) => {
     const r = repoRef.current;
@@ -325,6 +412,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const ids = (d[col] as AnyRecord[]).map((x) => x.id);
       if (ids.length) r.remove(col, ids).catch(() => {});
     }
+    const logIds = (await readOnce(r, 'parseLogs').catch(() => [])).map((x) => x.id);
+    if (logIds.length) await r.remove('parseLogs', logIds).catch(() => {});
     const assetIds = await r.listAssetIds().catch(() => [] as string[]);
     if (assetIds.length) await r.removeAsset(assetIds).catch(() => {});
     // Keep the app usable: restore the default categories.

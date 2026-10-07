@@ -1,5 +1,6 @@
 import type { CollectionMap, CollectionName, Mood, StickerPlacement } from '../types';
 import { COLLECTIONS } from '../types';
+import { LEGACY_CATEGORIES } from './defaults';
 import { compressImage, dataUrlToBlob, PHOTO_PRESET, RECEIPT_PRESET, STICKER_PRESET, type ImagePreset } from '../lib/image';
 import { isValidYmd, today } from '../lib/date';
 import { newId, nowIso } from '../lib/util';
@@ -225,6 +226,15 @@ export async function convertLegacy(data: LegacyData, onProgress?: (msg: string)
   const raw: Record<string, unknown[]> = {};
 
   raw.categories = (data.categories || []).map((c, order) => ({ ...c, order, createdAt: now, updatedAt: now }));
+  // The old app kept its default categories in code, so items can point at ids that are not in
+  // data.categories (e.g. 'work', 'routine'). Recreate those so nothing ends up uncategorized.
+  {
+    const known = new Set((raw.categories as { id: string }[]).map((c) => c.id));
+    const used = new Set([...(data.plannerItems || []), ...(data.checklist || []), ...(data.routines || [])].map((x) => x.category).filter(Boolean) as string[]);
+    for (const c of LEGACY_CATEGORIES) {
+      if (used.has(c.id) && !known.has(c.id)) raw.categories.push({ ...c, order: 100 + raw.categories.length, createdAt: now, updatedAt: now });
+    }
+  }
 
   raw.events = [];
   for (const p of data.plannerItems || []) {

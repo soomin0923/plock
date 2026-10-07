@@ -7,6 +7,7 @@ import type {
   LedgerCategory,
   LedgerEntry,
   MoodJournal,
+  ParseLog,
   MusicTrack,
   Note,
   PlannerEvent,
@@ -136,6 +137,8 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
     starred: bool(r.starred),
     done: bool(r.done),
   }),
+
+  parseLogs: (r): ParseLog => ({ ...(r as unknown as ParseLog), ...base(r) }),
 
   prefs: (r): Prefs => ({
     ...base(r),

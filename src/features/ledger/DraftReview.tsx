@@ -4,6 +4,7 @@ import type { LedgerType } from '../../types';
 import { useData } from '../../data/DataProvider';
 import { AssetImage } from '../../components/AssetImage';
 import { Button, Select, Sheet, TextInput } from '../../components/ui';
+import { finishParseLog, ledgerFields } from '../../lib/parseLog';
 import { useToast } from '../../components/Toast';
 import { formatKoreanDate } from '../../lib/date';
 import { cx, won } from '../../lib/util';
@@ -12,7 +13,7 @@ import { formatAmountInput, parseAmountInput, sortLedgerCategories } from './hel
 import { blankLedger } from './LedgerEditor';
 
 /** Confirm what the AI / parser understood before anything is saved. */
-export function DraftReview({ state, onClose }: { state: { items: LedgerDraft[]; receipt?: string; source: 'ai' | 'local' } | null; onClose: () => void }) {
+export function DraftReview({ state, onClose }: { state: { items: LedgerDraft[]; receipt?: string; source: 'ai' | 'local'; logId?: string } | null; onClose: () => void }) {
   const { data, upsert, releaseImages } = useData();
   const toast = useToast();
   const [items, setItems] = useState<LedgerDraft[]>([]);
@@ -21,14 +22,14 @@ export function DraftReview({ state, onClose }: { state: { items: LedgerDraft[];
   const patch = (i: number, p: Partial<LedgerDraft>) => setItems((list) => list.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   const cancel = () => {
     if (state?.receipt) releaseImages([state.receipt]);
+    finishParseLog(state?.logId, 'cancelled');
     onClose();
   };
   const save = () => {
     const valid = items.filter((d) => d.amount > 0);
-    upsert(
-      'ledger',
-      valid.map((d, i) => blankLedger(d.date, { type: d.type, amount: d.amount, categoryId: d.categoryId, method: d.method, memo: d.memo || undefined, receipt: i === 0 ? state?.receipt : undefined })),
-    );
+    const entries = valid.map((d, i) => blankLedger(d.date, { type: d.type, amount: d.amount, categoryId: d.categoryId, method: d.method, memo: d.memo || undefined, receipt: i === 0 ? state?.receipt : undefined }));
+    upsert('ledger', entries);
+    finishParseLog(state?.logId, 'saved', ledgerFields(entries), entries.map((e) => e.id));
     toast(`${valid.length}건 기록했어요. (지출 ${won(valid.filter((d) => d.type === 'expense').reduce((s, d) => s + d.amount, 0))})`);
     onClose();
   };

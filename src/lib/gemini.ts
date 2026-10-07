@@ -84,6 +84,12 @@ export function pickDefaultModel(models: GeminiModel[]): string | null {
 }
 
 let resolvedModel: { key: string; model: string } | null = null;
+let lastUsed: string | undefined;
+
+/** Model id of the most recent successful generate call (for the parse log). */
+export function lastModelUsed(): string | undefined {
+  return lastUsed;
+}
 
 async function modelFor(key: string, forceRefresh = false): Promise<string> {
   const chosen = getDeviceSettings().geminiModel.trim();
@@ -105,12 +111,14 @@ async function generateJson<T>(system: string, parts: Part[]): Promise<T> {
     contents: [{ role: 'user', parts }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
-  const run = async (model: string) =>
-    call<{ candidates?: { content?: { parts?: { text?: string }[] } }[] }>(
+  const run = async (model: string) => {
+    lastUsed = model;
+    return call<{ candidates?: { content?: { parts?: { text?: string }[] } }[] }>(
       `models/${encodeURIComponent(model)}:generateContent`,
       { method: 'POST', body },
       key,
     );
+  };
   let res;
   try {
     res = await run(await modelFor(key));

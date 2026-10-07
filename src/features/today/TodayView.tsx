@@ -244,7 +244,7 @@ function QuickAddWidget({ openSheet }: Ctx) {
     <QuickAdd
       placeholder="일정·할 일·습관을 말하듯 적어 보세요"
       onSubmit={async (text, useAi) => {
-        const draft = await parsePlanInput(text, useAi, data.categories, (m) => toast(m, 'error'));
+        const draft = await parsePlanInput(text, useAi, data.categories, (m) => toast(m, 'error'), 'today');
         openSheet({ mode: 'new', kind: draft.kind, date: draft.startDate, draft });
       }}
     />

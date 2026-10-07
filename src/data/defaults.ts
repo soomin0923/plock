@@ -124,3 +124,19 @@ export const THEME_COLORS = [
   { name: '네이비', color: '#34406B' },
   { name: '먹', color: '#3A3A3A' },
 ];
+
+/**
+ * Categories the previous Plock version used without storing them (its built-in defaults).
+ * Imported events still point at these ids, so they are recreated when missing.
+ */
+export const LEGACY_CATEGORIES: { id: string; name: string; color: string }[] = [
+  { id: 'work', name: '업무/직장', color: '#1A1A1A' },
+  { id: 'coding_test', name: '코딩테스트', color: '#0F766E' },
+  { id: 'personal', name: '개인일정', color: '#C1876B' },
+  { id: 'health', name: '운동/건강', color: '#849283' },
+  { id: 'study', name: '자기계발', color: '#7A6B58' },
+  { id: 'finance', name: '가계/금융', color: '#B25D3B' },
+  { id: 'travel', name: '여행/외출', color: '#3E5240' },
+  { id: 'routine', name: '루틴/반복', color: '#2A2A2A' },
+  { id: 'other', name: '기타(이전)', color: '#6B7280' },
+];
