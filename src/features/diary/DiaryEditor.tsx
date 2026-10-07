@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ImagePlus, Palette, Smile, Sticker, Trash2, Wallet, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpToLine, Check, Copy, ImagePlus, NotebookPen, Palette, Smile, Sticker, Trash2, Wallet, X } from 'lucide-react';
 import type { DiaryEntry, StickerPlacement } from '../../types';
 import { useData } from '../../data/DataProvider';
 import { Button, Spinner, useBackToClose, useConfirm } from '../../components/ui';
@@ -9,6 +9,8 @@ import { PHOTO_PRESET } from '../../lib/image';
 import { collectAssetRefs } from '../../data/repo';
 import { cx, newId, nowIso, won } from '../../lib/util';
 import { DiaryPage } from './DiaryPage';
+import { blankJournal, journalHasContent, MoodJournalForm } from './MoodJournal';
+import { getDeviceSettings, setDeviceSettings, useDeviceSettings } from '../../lib/deviceSettings';
 import { StickerPicker } from './StickerPicker';
 import { StickerMaker } from './StickerMaker';
 
@@ -16,7 +18,8 @@ type Panel = 'sticker' | 'style' | 'mood' | null;
 
 export function blankDiary(date: string): DiaryEntry {
   const now = nowIso();
-  return { id: newId('diary'), date, title: '', content: '', paper: 'plain', font: 'sans', photos: [], stickers: [], createdAt: now, updatedAt: now };
+  const journal = getDeviceSettings().diaryJournalDefault ? blankJournal() : undefined;
+  return { id: newId('diary'), date, title: '', content: '', paper: 'plain', font: 'sans', photos: [], stickers: [], journal, createdAt: now, updatedAt: now };
 }
 
 // Work in progress is mirrored to localStorage, so a closed tab or a crash never loses a diary.
@@ -43,7 +46,7 @@ function clearDraft() {
   }
 }
 
-const isBlank = (e: DiaryEntry) => !e.title.trim() && !e.content.trim() && !e.photos.length && !e.stickers.length;
+const isBlank = (e: DiaryEntry) => !e.title.trim() && !e.content.trim() && !e.photos.length && !e.stickers.length && !journalHasContent(e.journal);
 
 export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: DiaryEntry; isNew: boolean; onClose: () => void; onSaved?: (e: DiaryEntry) => void }) {
   const { data, upsert, saveImage, releaseImages } = useData();
@@ -56,6 +59,8 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
   const [makerOpen, setMakerOpen] = useState(false);
   const [uploading, setUploading] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
+  const journalRef = useRef<HTMLDivElement>(null);
+  const { diaryJournalDefault } = useDeviceSettings();
   const scrollRef = useRef<HTMLDivElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const added = useRef<string[]>([]);
@@ -116,7 +121,7 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
 
   const save = (auto = false) => {
     if (isBlank(entry)) return toast('내용을 조금이라도 적어 주세요.', 'info');
-    const next = { ...entry, title: entry.title.trim() };
+    const next = { ...entry, title: entry.title.trim(), journal: journalHasContent(entry.journal) ? entry.journal : undefined };
     upsert('diaries', next);
     clearDraft();
     releaseImages([...collectAssetRefs(initial), ...added.current], { col: 'diaries', id: next.id, next });
@@ -192,6 +197,16 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
 
   const sel = entry.stickers.find((s) => s.id === selected);
 
+  const openJournal = () => {
+    if (!entry.journal) set({ journal: blankJournal() });
+    setPanel(null);
+    setTimeout(() => journalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  const removeJournal = async () => {
+    if (journalHasContent(entry.journal) && !(await confirm({ title: '감정 일기 양식을 뺄까요?', message: '양식에 적은 내용이 지워져요.', confirmLabel: '빼기', danger: true }))) return;
+    set({ journal: undefined });
+  };
+
   return (
     <div className="animate-fade fixed inset-0 z-50 flex flex-col bg-paper" role="dialog" aria-modal="true" aria-label="일기 쓰기">
       {/* Top bar */}
@@ -234,6 +249,20 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
             pageRef={pageRef}
             className="rounded-[20px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_8px_24px_-12px_rgba(0,0,0,0.18)]"
           />
+          {entry.journal && (
+            <div ref={journalRef} className="mt-4 scroll-mt-4">
+              <MoodJournalForm value={entry.journal} onChange={(journal) => set({ journal })} fontFamily={DIARY_FONTS.find((f) => f.id === entry.font)?.family} />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
+                <label className="flex items-center gap-2 text-[13px] text-muted">
+                  <input type="checkbox" checked={diaryJournalDefault} onChange={(e) => setDeviceSettings({ diaryJournalDefault: e.target.checked })} className="h-4 w-4 accent-[var(--color-primary)]" />
+                  새 일기를 쓸 때 항상 이 양식으로 시작
+                </label>
+                <button type="button" onClick={removeJournal} className="text-[13px] font-semibold text-muted hover:text-expense">
+                  양식 빼기
+                </button>
+              </div>
+            </div>
+          )}
           {dayLedger.length > 0 && (
             <div className="mt-3 flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
               <Wallet className="h-5 w-5 flex-none text-primary" />
@@ -356,6 +385,7 @@ export function DiaryEditor({ initial, isNew, onClose, onSaved }: { initial: Dia
               <ToolButton icon={<Sticker className="h-5 w-5" />} label="스티커" active={panel === 'sticker'} onClick={() => setPanel(panel === 'sticker' ? null : 'sticker')} />
               <ToolButton icon={<Palette className="h-5 w-5" />} label="꾸미기" active={panel === 'style'} onClick={() => setPanel(panel === 'style' ? null : 'style')} />
               <ToolButton icon={<Smile className="h-5 w-5" />} label="기분·날씨" active={panel === 'mood'} onClick={() => setPanel(panel === 'mood' ? null : 'mood')} />
+              <ToolButton icon={<NotebookPen className="h-5 w-5" />} label="감정 일기" active={!!entry.journal} onClick={openJournal} />
             </>
           )}
         </div>

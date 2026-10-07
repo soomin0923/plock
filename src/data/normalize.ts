@@ -6,6 +6,7 @@ import type {
   Habit,
   LedgerCategory,
   LedgerEntry,
+  MoodJournal,
   MusicTrack,
   Note,
   PlannerEvent,
@@ -114,6 +115,7 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
             }),
           )
       : [],
+    journal: normalizeJournal(r.journal),
   }),
 
   stickers: (r): StickerAsset => ({ ...base(r), name: str(r.name, '스티커'), src: str(r.src) }),
@@ -161,6 +163,36 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
       : undefined,
   }),
 };
+
+function normalizeJournal(v: unknown): MoodJournal | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const r = v as Raw;
+  const scale = (x: unknown, max: number) => (typeof x === 'number' && Number.isInteger(x) && x >= 1 && x <= max ? x : undefined);
+  const list = (x: unknown) => Array.from({ length: 5 }, (_, i) => (Array.isArray(x) && typeof x[i] === 'string' ? (x[i] as string) : ''));
+  return {
+    sleepStart: optTime(r.sleepStart),
+    sleepEnd: optTime(r.sleepEnd),
+    sleepFace: r.sleepFace === 'good' || r.sleepFace === 'ok' || r.sleepFace === 'bad' ? r.sleepFace : undefined,
+    joy: scale(r.joy, 5),
+    calm: scale(r.calm, 5),
+    anxiety: scale(r.anxiety, 5),
+    gloom: scale(r.gloom, 5),
+    goodReason: optStr(r.goodReason),
+    badReason: optStr(r.badReason),
+    song: optStr(r.song),
+    place: optStr(r.place),
+    food: optStr(r.food),
+    healing: optStr(r.healing),
+    comfort: optStr(r.comfort),
+    thanksTo: optStr(r.thanksTo),
+    wish: optStr(r.wish),
+    gratitude: list(r.gratitude),
+    praise: list(r.praise),
+    regret: optStr(r.regret),
+    tomorrow: optStr(r.tomorrow),
+    condition: scale(r.condition, 10),
+  };
+}
 
 function normalizeMusic(v: unknown): MusicTrack[] | undefined {
   if (!Array.isArray(v)) return undefined;

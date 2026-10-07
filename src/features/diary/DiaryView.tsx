@@ -10,6 +10,7 @@ import { MOODS } from '../../data/defaults';
 import { addDays, addMonths, formatKoreanDate, monthKey, today } from '../../lib/date';
 import { cx } from '../../lib/util';
 import { DiaryPage } from './DiaryPage';
+import { journalText } from './MoodJournal';
 import { DiaryViewer, sortDiaries } from './DiaryViewer';
 import { blankDiary, DiaryEditor } from './DiaryEditor';
 
@@ -37,7 +38,7 @@ export function DiaryView() {
   const q = query.trim().toLowerCase();
   const list = useMemo(() => {
     const all = sortDiaries(data.diaries);
-    if (q) return all.filter((d) => `${d.title}\n${d.content}`.toLowerCase().includes(q));
+    if (q) return all.filter((d) => `${d.title}\n${d.content}\n${journalText(d.journal)}`.toLowerCase().includes(q));
     return all.filter((d) => monthKey(d.date) === monthKey(month));
   }, [data.diaries, q, month]);
 

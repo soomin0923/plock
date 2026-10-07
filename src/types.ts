@@ -86,6 +86,35 @@ export interface DiaryEntry extends BaseRecord {
   font: DiaryFont;
   photos: string[]; // asset refs, rendered in flow below the text
   stickers: StickerPlacement[];
+  /** Optional structured 감정 일기 form filled in alongside the free page. */
+  journal?: MoodJournal;
+}
+
+export type SleepFace = 'good' | 'ok' | 'bad';
+
+/** 감정 일기 양식: scales are 1–5 (기분) and 1–10 (마음 컨디션); all fields optional. */
+export interface MoodJournal {
+  sleepStart?: string; // HH:mm (잠든 시간)
+  sleepEnd?: string; // HH:mm (일어난 시간)
+  sleepFace?: SleepFace;
+  joy?: number;
+  calm?: number;
+  anxiety?: number;
+  gloom?: number;
+  goodReason?: string;
+  badReason?: string;
+  song?: string;
+  place?: string;
+  food?: string;
+  healing?: string;
+  comfort?: string;
+  thanksTo?: string;
+  wish?: string;
+  gratitude: string[]; // up to 5
+  praise: string[]; // up to 5
+  regret?: string;
+  tomorrow?: string;
+  condition?: number; // 1–10
 }
 
 export interface StickerAsset extends BaseRecord {

@@ -8,6 +8,8 @@ import { useToast } from '../../components/Toast';
 import { collectAssetRefs } from '../../data/repo';
 import { won } from '../../lib/util';
 import { DiaryPage } from './DiaryPage';
+import { journalHasContent, MoodJournalForm } from './MoodJournal';
+import { DIARY_FONTS } from '../../data/defaults';
 
 export function sortDiaries(list: DiaryEntry[]): DiaryEntry[] {
   return [...list].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
@@ -80,6 +82,11 @@ export function DiaryViewer({ id, onClose, onEdit, onNavigate }: { id: string; o
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[600px] px-3 pb-16 pt-4 sm:px-4 sm:pt-6">
           <DiaryPage entry={entry} onPhotoClick={setPhoto} className="rounded-[20px] shadow-[0_1px_3px_rgba(0,0,0,0.06),0_8px_24px_-12px_rgba(0,0,0,0.18)]" />
+          {entry.journal && journalHasContent(entry.journal) && (
+            <div className="mt-4">
+              <MoodJournalForm value={entry.journal} fontFamily={DIARY_FONTS.find((f) => f.id === entry.font)?.family} />
+            </div>
+          )}
           {spent > 0 && <p className="mt-3 text-center text-[13px] text-muted">이 날 지출 {won(spent)}</p>}
         </div>
       </div>

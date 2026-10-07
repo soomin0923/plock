@@ -19,6 +19,8 @@ export interface DeviceSettings {
   reminderSound: boolean;
   /** Tabs hidden from the navigation on this device. */
   hiddenTabs: string[];
+  /** Start new diaries with the 감정 일기 form. */
+  diaryJournalDefault: boolean;
 }
 
 const KEY = 'plock_device_settings_v2';
@@ -34,6 +36,7 @@ const defaults: DeviceSettings = {
   reminderLead: 10,
   reminderSound: true,
   hiddenTabs: [],
+  diaryJournalDefault: false,
 };
 
 function load(): DeviceSettings {
