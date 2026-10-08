@@ -15,3 +15,7 @@ plock-parse-logs-*
 plock-backup-*.json
 *backup*.json
 exports/
+
+# Parser evaluation: LLM response cache and run outputs
+eval/.cache/
+eval/results/
