@@ -90,16 +90,32 @@ function loadDataset(file: string): Gold[] {
   };
   const idx = { id: col('id'), ref: col('ref_date'), text: col('text'), kind: col('kind'), date: col('date'), end: col('end_date'), time: col('start_time'), type: col('expr_type') };
   const nil = (v?: string) => (v && v.trim() ? v.trim() : null);
+  // Excel rewrites cells it recognises: "02:00" → "2:00" or "2:00:00" or "오전 2:00",
+  // "2026-10-08" → "2026/10/8". Put them back into HH:mm / YYYY-MM-DD before validating.
+  const pad = (x: string | number) => String(x).padStart(2, '0');
+  const normDate = (v: string | null) => {
+    const m = v?.match(/^(\d{4})[-/.]\s*(\d{1,2})[-/.]\s*(\d{1,2})\.?$/);
+    return m ? `${m[1]}-${pad(m[2])}-${pad(m[3])}` : v;
+  };
+  const normTime = (v: string | null) => {
+    const m = v?.match(/^(오전|오후|AM|PM)?\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+    if (!m) return v;
+    let h = Number(m[2]);
+    const ap = (m[1] || m[4] || '').toUpperCase();
+    if ((ap === '오후' || ap === 'PM') && h < 12) h += 12;
+    if ((ap === '오전' || ap === 'AM') && h === 12) h = 0;
+    return `${pad(h)}:${m[3]}`;
+  };
   const problems: string[] = [];
   const out = rows.map((r, n) => {
     const g: Gold = {
       id: nil(r[idx.id]) || String(n + 1),
-      ref_date: (r[idx.ref] || '').trim(),
+      ref_date: normDate((r[idx.ref] || '').trim()) ?? '',
       text: (r[idx.text] || '').trim(),
       kind: (r[idx.kind] || '').trim(),
-      date: nil(r[idx.date]),
-      end_date: nil(r[idx.end]),
-      start_time: nil(r[idx.time]),
+      date: normDate(nil(r[idx.date])),
+      end_date: normDate(nil(r[idx.end])),
+      start_time: normTime(nil(r[idx.time])),
       expr_type: nil(r[idx.type]) || '기타',
     };
     const where = `${file} ${n + 2}행 (${g.text || '빈 문장'})`;
