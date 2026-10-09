@@ -137,6 +137,13 @@ function loadDataset(file: string): Gold[] {
     if (g.kind === 'task' && g.end_date && !g.date) warnings.push(`${where}: 할 일의 마감일은 date 칸에 (end_date는 여러 날 일정용)`);
     if (g.kind === 'habit' && !/매일|매주|마다|평일|주말마다|[월화수목금토일]{2,}(?=\s|$)|루틴|습관/.test(g.text)) warnings.push(`${where}: 반복 표현이 없는데 habit`);
     if (g.end_date && g.date && g.end_date < g.date) warnings.push(`${where}: end_date가 date보다 빠름`);
+    if (g.kind === 'event' && !g.date) warnings.push(`${where}: event인데 date가 비어 있음 (앱의 일정은 날짜가 꼭 있음. 날짜를 못 정하면 task로)`);
+    const hours = [...g.text.matchAll(/(\d{1,2})\s*시|(\d{1,2}):\d{2}|(\d{1,2})\s*[~-]\s*\d{1,2}\s*시/g)].map((m) => Number(m[1] ?? m[2] ?? m[3]) % 12);
+    if (g.start_time && hours.length && !hours.includes(Number(g.start_time.slice(0, 2)) % 12))
+      warnings.push(`${where}: 문장의 시각과 start_time(${g.start_time})의 시가 다름`);
+    if (g.start_time === '12:00' && /밤\s*12\s*시|자정/.test(g.text)) warnings.push(`${where}: 밤 12시는 00:00 (다음 날)`);
+    if (g.date && /주말(?!마다)/.test(g.text) && ![0, 6].includes(new Date(`${g.date}T00:00:00Z`).getUTCDay()))
+      warnings.push(`${where}: '주말'인데 date(${g.date})가 토·일이 아님`);
   });
   if (warnings.length) {
     console.warn(`\n라벨 확인 필요 ${warnings.length}건 (그대로 채점은 합니다)\n- ${warnings.join('\n- ')}\n`);
