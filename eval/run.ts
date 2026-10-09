@@ -127,6 +127,8 @@ function loadDataset(file: string): Gold[] {
     if (g.start_time && !/^\d{2}:\d{2}$/.test(g.start_time)) problems.push(`${where}: start_time은 HH:mm (예: 09:00)`);
     return g;
   });
+  // end_date equal to date means a single day; treat it as empty (the parsers emit no end_date then).
+  for (const g of out) if (g.end_date && g.end_date === g.date) g.end_date = null;
   if (problems.length) throw new Error(`라벨 형식 오류 ${problems.length}건\n- ${problems.join('\n- ')}`);
 
   // Labels that are valid but probably not what was meant (scored anyway).
