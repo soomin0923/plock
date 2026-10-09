@@ -83,17 +83,33 @@ const byOutcome = plan.reduce<Record<string, number>>((m, l) => ((m[l.outcome] =
 const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)}%` : '-');
 const eq = (a: F, b: F, f: (typeof FIELDS)[number]) => a[f] === b[f];
 
-interface Row { l: ParseLog; gold: F; logged: F; now: F }
-const rows: Row[] = saved.map((l) => ({ l, gold: norm(l.final), logged: norm(l.predicted), now: ruleNow(l) }));
+// A value the user filled in that the sentence never mentioned (a to-do saved with the form's
+// default date, a time picked for "새벽까지") is not something a parser could have read: not scored.
+const DATE_WORDS = /오늘|내일|낼|모레|글피|이따|요일|욜|주말|평일|담주|이번|다음|\d|말까지|뒤|후|아침|점심|저녁|밤|새벽|오전|오후|낮|퇴근|출근|자정|정오|연휴|[월화수목금토일](?=\s|$)/;
+const TIME_WORDS = /\d{1,2}\s*시|\d{1,2}:\d{2}|(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|열한|열두)\s*시(?![간작])/;
+function addedByUser(l: ParseLog, gold: F): Set<(typeof FIELDS)[number]> {
+  const out = new Set<(typeof FIELDS)[number]>();
+  if (gold.date && !DATE_WORDS.test(l.input)) out.add('date');
+  if (gold.start_time && !TIME_WORDS.test(l.input)) out.add('start_time');
+  return out;
+}
+
+interface Row { l: ParseLog; gold: F; logged: F; now: F; added: Set<(typeof FIELDS)[number]> }
+const rows: Row[] = saved.map((l) => {
+  const gold = norm(l.final);
+  return { l, gold, logged: norm(l.predicted), now: ruleNow(l), added: addedByUser(l, gold) };
+});
+const fieldsOf = (r: Row) => FIELDS.filter((f) => !r.added.has(f));
+const addedCount = rows.filter((r) => r.added.size).length;
 
 function table(title: string, subset: Row[]): string[] {
   const out = [`### ${title} (n=${subset.length})`, '', '| 예측 | kind | date | start_time | end_date | 완전 일치 |', '|---|---|---|---|---|---|'];
   for (const [name, pick] of [['그때 앱의 예측', (r: Row) => r.logged], ['현재 규칙 파서', (r: Row) => r.now]] as const) {
     const cells = FIELDS.map((f) => {
-      const n = subset.filter((r) => f === 'end_date' ? !!r.gold.end_date || !!pick(r).end_date : f === 'kind' || r.gold.kind !== 'habit');
+      const n = subset.filter((r) => !r.added.has(f) && (f === 'end_date' ? !!r.gold.end_date || !!pick(r).end_date : f === 'kind' || r.gold.kind !== 'habit'));
       return `${pct(n.filter((r) => eq(pick(r), r.gold, f)).length, n.length)} (n=${n.length})`;
     });
-    const exact = subset.filter((r) => FIELDS.every((f) => eq(pick(r), r.gold, f))).length;
+    const exact = subset.filter((r) => fieldsOf(r).every((f) => eq(pick(r), r.gold, f))).length;
     out.push(`| ${name} | ${cells.join(' | ')} | ${pct(exact, subset.length)} |`);
   }
   return [...out, ''];
@@ -109,6 +125,7 @@ const lines = [
   `- 기간: ${plan.map((l) => l.refDate).sort()[0] ?? '-'} ~ ${plan.map((l) => l.refDate).sort().at(-1) ?? '-'}`,
   `- 일정 파싱 기록 ${plan.length}건: ${Object.entries(byOutcome).map(([k, v]) => `${k} ${v}`).join(', ')}`,
   `- 채점 대상: 저장된 ${saved.length}건 (저장한 최종 값을 정답으로 봄. 취소·되돌리기는 제외)`,
+  `- 문장에 없던 값을 사용자가 채운 기록: ${addedCount}건 (그 필드는 채점에서 뺌. 예: 날짜 없는 할 일을 폼 기본값인 오늘로 저장, "새벽까지"에 시각 지정)`,
   `- 그때 사용자가 예측을 고친 비율: ${pct(saved.filter((l) => (l.changed || []).some((c) => c !== 'title' && c !== 'categoryId' && c !== 'priority')).length, saved.length)} (제목·카테고리·우선순위만 고친 경우 제외)`,
   '',
   '## 정확도',
@@ -122,14 +139,14 @@ const lines = [
   '- 문장 수가 적으면 1건이 몇 %p입니다. n을 같이 쓰세요.',
 ];
 
-const wrong = rows.filter((r) => !FIELDS.every((f) => eq(r.now, r.gold, f)) || !FIELDS.every((f) => eq(r.logged, r.gold, f)));
+const wrong = rows.filter((r) => r.added.size || !fieldsOf(r).every((f) => eq(r.now, r.gold, f)) || !fieldsOf(r).every((f) => eq(r.logged, r.gold, f)));
 const fmt = (x: F) => `${x.kind} ${x.date ?? '-'} ${x.start_time ?? ''}${x.end_date ? `~${x.end_date}` : ''}`.trim();
 const wrongLines = [
   '# 틀린 입력 (본인 확인용)',
   '',
-  '| 입력일 | 입력 | 저장한 값 | 그때 예측 (방식) | 현재 규칙 파서 |',
-  '|---|---|---|---|---|',
-  ...wrong.map((r) => `| ${r.l.refDate} ${r.l.refTime} | ${r.l.input.replace(/\|/g, '/').replace(/\n/g, ' ')} | ${fmt(r.gold)} | ${fmt(r.logged)} (${r.l.mode}) | ${fmt(r.now)} |`),
+  '| 입력일 | 입력 | 저장한 값 | 그때 예측 (방식) | 현재 규칙 파서 | 채점 제외 (사용자가 채움) |',
+  '|---|---|---|---|---|---|',
+  ...wrong.map((r) => `| ${r.l.refDate} ${r.l.refTime} | ${r.l.input.replace(/\|/g, '/').replace(/\n/g, ' ')} | ${fmt(r.gold)} | ${fmt(r.logged)} (${r.l.mode}) | ${fmt(r.now)} | ${[...r.added].join(', ')} |`),
 ];
 
 const outDir = path.join('eval/results', `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}-replay`);
