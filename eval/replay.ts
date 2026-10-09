@@ -11,17 +11,35 @@
  * Output: eval/results/<stamp>-replay/summary.md (no input text, safe to share) and wrong.md (inputs).
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { localParsePlan } from '../src/lib/nlParser';
 import { DEFAULT_CATEGORIES } from '../src/data/defaults';
 import type { ParseFields, ParseLog } from '../src/types';
 
 const args = process.argv.slice(2);
-const file = args.find((a) => /\.jsonl$/i.test(a)) || process.env.npm_config_data;
+// Without a path, take the newest plock-parse-logs-*.jsonl from the user's Downloads folder.
+const downloads = path.join(os.homedir(), 'Downloads');
+const found = (() => {
+  try {
+    return fs
+      .readdirSync(downloads)
+      .filter((f) => /^plock-parse-logs.*\.jsonl$/i.test(f))
+      .map((f) => path.join(downloads, f))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  } catch {
+    return [];
+  }
+})();
+const given = args.find((a) => /\.jsonl$/i.test(a)) || process.env.npm_config_data;
+const file = given ?? found[0];
 if (!file || !fs.existsSync(file)) {
-  console.error('사용법: npm run eval:replay -- <plock-parse-logs-YYYYMMDD.jsonl 경로>');
+  console.error(given ? `파일이 없습니다: ${given}` : `${downloads}에서 plock-parse-logs-*.jsonl을 찾지 못했습니다.`);
+  if (found.length) console.error(`다운로드 폴더에 있는 파일:\n- ${found.join('\n- ')}`);
+  console.error('사용법: npm run eval:replay -- [jsonl 경로] [--before 2026-10-09T22:10]  (경로를 빼면 다운로드 폴더의 최신 파일)');
   process.exit(1);
 }
+console.log(`파일: ${file}`);
 
 // --before 2026-10-09T21:00  → only logs made before that local time (e.g. before a deploy)
 const before = (() => {
