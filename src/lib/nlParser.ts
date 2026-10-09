@@ -1,5 +1,5 @@
 import type { Category, LedgerCategory, LedgerType, PayMethod, Priority } from '../types';
-import { addDays, addMinutesHm, startOfWeek, weekday, ymd, parseYmd } from './date';
+import { addDays, addMinutesHm, addMonths, startOfWeek, weekday, ymd, parseYmd } from './date';
 
 // Rule-based Korean parser used when the user has no Gemini key (or the AI call fails).
 
@@ -31,10 +31,64 @@ export interface LedgerDraft {
 }
 
 const DAY_IDX: Record<string, number> = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
+const KOR_NUM: Record<string, number> = { 한: 1, 두: 2, 세: 3, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 열: 10, 열한: 11, 열두: 12 };
+const KOR_DAYS: Record<string, number> = { 하루: 1, 이틀: 2, 사흘: 3, 나흘: 4, 닷새: 5, 엿새: 6, 이레: 7, 열흘: 10, 보름: 15 };
+const NTH: Record<string, number> = { 첫: 1, 첫째: 1, 둘째: 2, 셋째: 3, 넷째: 4, 다섯째: 5, 마지막: -1 };
+
+/**
+ * Rewrite the casual forms people actually type into the forms the resolver reads:
+ * 낼 → 내일, 담주 → 다음 주, 화욜 → 화요일, 금 7시 → 금요일 7시, 세 시 → 3시, 이틀 뒤 → 2일 뒤,
+ * 일주일 → 1주, 10.15 / 10/15 → 10월 15일, 월~수 / 토일 → 월요일부터 수요일까지, 15~17시 → 15시~17시.
+ */
+export function normalizeKorean(input: string): string {
+  let t = ` ${input} `;
+  t = t.replace(/\(\s*[월화수목금토일](?:요일)?\s*\)/g, ' '); // 10/12(월)
+  t = t.replace(/(\s)낼\s*모레/g, '$1내일모레').replace(/(\s)낼(?=\s|까지|부터|은|도|에)/g, '$1내일');
+  t = t.replace(/담주/g, '다음 주').replace(/담달/g, '다음 달');
+  t = t.replace(/(다다음|다음|이번|저번|지난)\s*(주|달)/g, '$1 $2');
+  t = t.replace(/([월화수목금토일])욜/g, '$1요일');
+  t = t.replace(/(열한|열두|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열)\s*시(?![간작])/g, (_, w: string) => `${KOR_NUM[w]}시`);
+  t = t.replace(/(하루|이틀|사흘|나흘|닷새|엿새|이레|열흘|보름)(?=\s*(?:뒤|후|간|동안))/g, (w) => `${KOR_DAYS[w]}일`);
+  t = t.replace(/일주일/g, '1주').replace(/(한|두|세|네)\s*(주|달)(?=\s*(?:뒤|후|간|동안))/g, (_, w: string, u: string) => `${KOR_NUM[w]}${u}`);
+  t = t.replace(/(\d+)\s*개월/g, '$1달');
+  // 10.15 / 10/15 → 10월 15일 (only plausible month/day pairs, not times or decimals)
+  t = t.replace(/(^|[\s~(])(\d{1,2})[./](\d{1,2})(?=[\s~(]|까지|부터|에|$)/g, (m, p: string, a: string, b: string) =>
+    +a >= 1 && +a <= 12 && +b >= 1 && +b <= 31 ? `${p}${+a}월 ${+b}일` : m,
+  );
+  // Date ranges written with ~
+  t = t.replace(/(\d{1,2}월\s*\d{1,2}일)\s*~\s*(\d{1,2}월\s*\d{1,2}일|\d{1,2}일)/g, '$1부터 $2까지');
+  t = t.replace(/(^|\s)([월화수목금토일])(?:요일)?\s*~\s*([월화수목금토일])(?:요일)?(?=\s|$)/g, '$1$2요일부터 $3요일까지');
+  // Two consecutive weekdays (토일, 수목) = a span; non-consecutive runs (월수금) are left for the habit check.
+  t = t.replace(/(\s)([월화수목금토일])([월화수목금토일])(?=\s)/g, (m, p: string, a: string, b: string) =>
+    (DAY_IDX[a] + 1) % 7 === DAY_IDX[b] ? `${p}${a}요일부터 ${b}요일까지` : m,
+  );
+  // One-letter weekday before a time / day part / 까지: 금 7시, 다음 주 토 10시, 월 오전
+  t = t.replace(/(\s)([월화수목금토])(?=\s*(?:\d|오전|오후|아침|점심|저녁|밤|새벽|낮|까지|부터))/g, '$1$2요일');
+  t = t.replace(/(주\s+)일(?=\s*(?:\d|오전|오후|아침|점심|저녁|밤|새벽|낮|까지|부터))/g, '$1일요일');
+  // Hour ranges: 15~17시 → 15시~17시
+  t = t.replace(/(\d{1,2})\s*~\s*(\d{1,2})\s*시/g, '$1시~$2시');
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+function nthWeekdayOfMonth(year: number, month0: number, dow: number, n: number): string {
+  if (n < 0) {
+    const last = new Date(year, month0 + 1, 0);
+    last.setDate(last.getDate() - ((last.getDay() - dow + 7) % 7));
+    return ymd(last);
+  }
+  const first = new Date(year, month0, 1);
+  first.setDate(1 + ((dow - first.getDay() + 7) % 7) + (n - 1) * 7);
+  return ymd(first);
+}
+
+function monthOffset(word: string): number {
+  return word === '다다음' ? 2 : word === '다음' ? 1 : word === '지난' || word === '저번' ? -1 : 0;
+}
 
 /** Resolve a Korean date expression. Returns null when the text has no date in it. */
 export function resolveKoreanDate(expr: string, base: string, contextMonth?: number): string | null {
-  const t = expr.trim();
+  const t = normalizeKorean(expr);
+  const b = parseYmd(base);
   if (/그저께|그제/.test(t)) return addDays(base, -2);
   if (/어제/.test(t)) return addDays(base, -1);
   if (/오늘/.test(t)) return base;
@@ -46,15 +100,45 @@ export function resolveKoreanDate(expr: string, base: string, contextMonth?: num
   if (later) return addDays(base, Number(later[1]));
   const weeksLater = t.match(/(\d+)\s*주\s*(?:뒤|후)/);
   if (weeksLater) return addDays(base, Number(weeksLater[1]) * 7);
+  const monthsLater = t.match(/(\d+)\s*달\s*(?:뒤|후)/);
+  if (monthsLater) return addMonths(base, Number(monthsLater[1]));
 
-  const week = t.match(/(이번\s*주|다음\s*주|담주|다다음\s*주)?\s*([월화수목금토일])요일/);
+  // 11월 첫째 주 월요일, 다음 달 마지막 금요일
+  const nth = t.match(/(?:(\d{1,2})\s*월|(이번|다음|다다음)\s*달)\s*(첫째|첫|둘째|셋째|넷째|다섯째|마지막)\s*(?:주\s*)?([월화수목금토일])요일/);
+  if (nth) {
+    let y = b.getFullYear();
+    let m0 = nth[1] ? Number(nth[1]) - 1 : b.getMonth() + monthOffset(nth[2]);
+    if (nth[1] && m0 < b.getMonth() - 1) y += 1;
+    const d = nthWeekdayOfMonth(y, m0, DAY_IDX[nth[4]], NTH[nth[3]]);
+    return d;
+  }
+
+  // 월말, 10월 말, 다음 달 말
+  const monthEnd = t.match(/(?:(\d{1,2})\s*월|(이번|다음|다다음)\s*달)?\s*말(?:까지|에|$|\s)/);
+  if (monthEnd && (monthEnd[1] || monthEnd[2] || /월말/.test(t))) {
+    const m0 = monthEnd[1] ? Number(monthEnd[1]) - 1 : b.getMonth() + monthOffset(monthEnd[2] || '');
+    let y = b.getFullYear();
+    if (monthEnd[1] && m0 < b.getMonth() - 1) y += 1;
+    return ymd(new Date(y, m0 + 1, 0));
+  }
+
+  // 이번 주말 / 다음 주 주말 / 주말 (not 주말마다): the Saturday of that week
+  const weekend = t.match(/(이번|다음|다다음)?\s*주\s*(?:주말|말)|주말(?!\s*마다)/);
+  if (weekend) {
+    const sat = addDays(startOfWeek(base, 1), 5);
+    const add = weekend[1] === '다음' ? 7 : weekend[1] === '다다음' ? 14 : 0;
+    const d = addDays(sat, add);
+    return !weekend[1] && d < base ? base : d; // on a Sunday "주말" is today
+  }
+
+  const week = t.match(/(이번\s*주|다음\s*주|다다음\s*주)?\s*([월화수목금토일])요일/);
   if (week) {
     const target = DAY_IDX[week[2]];
     const monday = startOfWeek(base, 1);
     const offset = target === 0 ? 6 : target - 1;
     let d = addDays(monday, offset);
     const prefix = (week[1] || '').replace(/\s/g, '');
-    if (prefix === '다음주' || prefix === '담주') d = addDays(d, 7);
+    if (prefix === '다음주') d = addDays(d, 7);
     else if (prefix === '다다음주') d = addDays(d, 14);
     else if (!prefix && d < base) d = addDays(d, 7); // bare "금요일" = the upcoming one
     return d;
@@ -63,18 +147,20 @@ export function resolveKoreanDate(expr: string, base: string, contextMonth?: num
   const full = t.match(/(\d{4})[-./년]\s*(\d{1,2})[-./월]\s*(\d{1,2})/);
   if (full) return ymd(new Date(Number(full[1]), Number(full[2]) - 1, Number(full[3])));
 
-  const md = t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일?/) || t.match(/(?:^|\s)(\d{1,2})\/(\d{1,2})(?:\s|$)/);
+  const md = t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일?/);
   if (md) {
-    const b = parseYmd(base);
     let d = new Date(b.getFullYear(), Number(md[1]) - 1, Number(md[2]));
     // "1월 3일" written in December means next year.
     if (ymd(d) < addDays(base, -60)) d = new Date(b.getFullYear() + 1, Number(md[1]) - 1, Number(md[2]));
     return ymd(d);
   }
 
+  // 다음 달 15일
+  const relMonthDay = t.match(/(이번|다음|다다음)\s*달\s*(\d{1,2})\s*일/);
+  if (relMonthDay) return ymd(new Date(b.getFullYear(), b.getMonth() + monthOffset(relMonthDay[1]), Number(relMonthDay[2])));
+
   const dayOnly = t.match(/(?:^|[^\d])(\d{1,2})\s*일(?!\s*(?:뒤|후|간|동안))/);
   if (dayOnly) {
-    const b = parseYmd(base);
     const month = contextMonth ? contextMonth - 1 : b.getMonth();
     let d = new Date(b.getFullYear(), month, Number(dayOnly[1]));
     if (!contextMonth && ymd(d) < base) d = new Date(b.getFullYear(), month + 1, Number(dayOnly[1]));
@@ -92,19 +178,30 @@ interface TimeMatch {
 function parseTimes(text: string): TimeMatch {
   const re = /(오전|오후|아침|낮|저녁|밤|새벽)?\s*(\d{1,2})\s*(?:시\s*(반|\d{1,2}\s*분)?|:(\d{2}))/g;
   const found: { hm: string; raw: string }[] = [];
+  // Context for a bare "8시": 이따/저녁 → evening, 기상/출근 → morning.
+  const laterToday = /이따|퇴근\s*(?:후|하고)/.test(text);
+  const morning = /기상|일어나|출근/.test(text);
   let m: RegExpExecArray | null;
+  let lastMer: string | undefined;
   while ((m = re.exec(text))) {
     let h = Number(m[2]);
     if (h > 24) continue;
     const min = m[3] === '반' ? 30 : m[3] ? parseInt(m[3], 10) : m[4] ? Number(m[4]) : 0;
-    const mer = m[1];
-    if (mer === '오후' || mer === '저녁' || mer === '밤') {
+    // "오후 1시~4시": the second time inherits the first one's 오전/오후.
+    const mer = m[1] || (found.length ? lastMer : undefined);
+    if (m[1]) lastMer = m[1];
+    if (mer === '오후' || mer === '저녁') {
       if (h < 12) h += 12;
+    } else if (mer === '밤') {
+      if (h === 12) h = 0; // 밤 12시 = midnight
+      else if (h >= 6 && h < 12) h += 12;
     } else if (mer === '오전' || mer === '새벽' || mer === '아침') {
       if (h === 12) h = 0;
     } else if (mer === '낮') {
       if (h < 7) h += 12;
-    } else if (!m[4] && h >= 1 && h <= 7) {
+    } else if (!m[4] && laterToday && h < 12) {
+      h += 12;
+    } else if (!m[4] && !morning && h >= 1 && h <= 7) {
       h += 12; // "3시 회의" almost always means 15:00
     }
     found.push({ hm: `${String(h % 24).padStart(2, '0')}:${String(min).padStart(2, '0')}`, raw: m[0] });
@@ -135,7 +232,9 @@ function guessCategory(text: string, categories: Category[]): string {
 function parseHabitDays(text: string): number[] {
   if (/평일/.test(text)) return [1, 2, 3, 4, 5];
   if (/주말/.test(text)) return [0, 6];
-  const seq = text.match(/([월화수목금토일](?:요일)?(?:\s*[,·/]?\s*[월화수목금토일](?:요일)?)*)\s*(?:마다|에)/);
+  const seq =
+    text.match(/([월화수목금토일](?:요일)?(?:\s*[,·/]?\s*[월화수목금토일](?:요일)?)*)\s*(?:마다|에)/) ||
+    text.match(/(?:^|\s)([월화수목금토일]{2,})(?=\s|$)/);
   if (seq) {
     const days = Array.from(seq[1].replace(/요일/g, '').replace(/[\s,·/]/g, '')).map((c) => DAY_IDX[c]).filter((d) => d !== undefined);
     if (days.length) return Array.from(new Set(days)).sort();
@@ -144,16 +243,31 @@ function parseHabitDays(text: string): number[] {
 }
 
 export function localParsePlan(input: string, today: string, categories: Category[]): PlanDraft {
-  const text = input.trim();
+  const original = input.trim();
+  let text = normalizeKorean(original);
   let startDate: string | null = null;
   let endDate: string | null = null;
   let deadline = false;
 
+  // "1박2일", "3일간", "나흘 동안": a length in days counted from the start date.
+  let spanDays = 0;
+  const nights = text.match(/(\d+)\s*박\s*(\d+)\s*일/);
+  if (nights) {
+    spanDays = Number(nights[2]);
+    text = text.replace(nights[0], ' ').replace(/\s+/g, ' ').trim();
+  }
+  const span = text.match(/(\d+)\s*일\s*(?:간|동안)/);
+  if (span) spanDays = Number(span[1]);
+
   const range = text.match(/(.+?)\s*(?:부터|에서)\s*(.+?)\s*까지/);
   if (range) {
     startDate = resolveKoreanDate(range[1], today);
-    const startMonth = startDate ? parseYmd(startDate).getMonth() + 1 : undefined;
-    endDate = resolveKoreanDate(range[2], today, startMonth);
+    if (startDate) {
+      const startMonth = parseYmd(startDate).getMonth() + 1;
+      // A weekday or bare day at the end counts from the start ("다음 주 월요일부터 수요일까지").
+      const relative = !/오늘|내일|모레|글피|주|달|월/.test(range[2].replace(/[월화수목금토일]요일/g, ''));
+      endDate = resolveKoreanDate(range[2], relative ? startDate : today, startMonth);
+    }
   }
   if (!startDate) {
     const until = text.match(/(.+?)\s*까지/);
@@ -162,28 +276,45 @@ export function localParsePlan(input: string, today: string, categories: Categor
       deadline = !!startDate;
     }
   }
-  if (!startDate) startDate = resolveKoreanDate(text, today);
+  if (!startDate) startDate = resolveKoreanDate(text.replace(/\d+\s*일\s*(?:간|동안)/, ' '), today);
+  if (startDate && spanDays > 1 && !endDate) endDate = addDays(startDate, spanDays - 1);
+
+  const times = parseTimes(text);
+  // No date word, but a clock time or a part of the day ("저녁에 장보기", "새벽 1시"): today,
+  // or tomorrow when it is after midnight. Without either, there is no date (a to-do).
+  const partOfDay = /아침|점심|저녁|밤|새벽|오전|오후|낮|이따|퇴근|출근/.test(text);
+  if (!startDate && (times.start || partOfDay)) {
+    startDate = times.start && times.start < '06:00' && /새벽|밤/.test(text) ? addDays(today, 1) : today;
+  }
   const hasDate = !!startDate;
   startDate = startDate || today;
   endDate = endDate && endDate >= startDate ? endDate : startDate;
 
-  const times = parseTimes(text);
-  const isHabit = /매일|매주|마다|루틴|습관|꾸준히/.test(text);
-  const isTaskWord = /해야|하기$|제출|마감|신청|예약하기|사기|보내기|할\s*일|챙기기|끝내기/.test(text);
+  const isHabit = /매일|매주|마다|루틴|습관|꾸준히|평일|(?:^|\s)[월화수목금토일]{2,}(?=\s|$)/.test(text);
+  // Things you hand in or pay by a time are to-dos even with a clock time ("밤 11시 과제 마감").
+  const isDueWord = /마감|제출|납부|접수|입금|송금|정산/.test(text);
+  const isTaskWord = /해야|하기$|신청하기|예약하기|사기|보내기|할\s*일|챙기기|끝내기/.test(text);
   const isEventWord = /약속|회의|미팅|여행|모임|수업|병원|예약|생일|콘서트|시험|면접|파티|데이트|공연|발표/.test(text);
 
   let kind: PlanDraft['kind'];
   if (isHabit) kind = 'habit';
-  else if (deadline && !times.start) kind = 'task';
-  else if (times.start || isEventWord || (range && endDate !== startDate)) kind = 'event';
-  else if (isTaskWord || !hasDate) kind = 'task';
+  else if (!hasDate) kind = 'task';
+  else if (deadline || isDueWord) kind = 'task';
+  else if (times.start || isEventWord || endDate !== startDate) kind = 'event';
+  else if (isTaskWord) kind = 'task';
   else kind = 'event';
 
   let title = text;
   if (range) title = title.replace(range[0], ' ');
   times.raw.forEach((r) => (title = title.replace(r, ' ')));
   title = title
-    .replace(/(이번\s*주|다음\s*주|담주|다다음\s*주)?\s*[월화수목금토일]요일/g, ' ')
+    .replace(/(이번\s*주|다음\s*주|다다음\s*주)?\s*[월화수목금토일]요일/g, ' ')
+    .replace(/(?:\d{1,2}\s*월|(?:이번|다음|다다음)\s*달)\s*(?:첫째|첫|둘째|셋째|넷째|다섯째|마지막)\s*주?/g, ' ')
+    .replace(/(?:\d{1,2}\s*월\s*|(?:이번|다음|다다음)\s*달\s*)?말(?=까지|에|\s|$)|월말/g, ' ')
+    .replace(/(?:이번|다음|다다음)?\s*주\s*주말|(?:이번|다음|다다음)\s*주말|주말(?!\s*마다)/g, ' ')
+    .replace(/(?:이번|다음|다다음)\s*(?:주|달)/g, ' ')
+    .replace(/\d+\s*일\s*(?:간|동안)|\d+\s*달\s*(?:뒤|후)/g, ' ')
+    .replace(/이따가?/g, ' ')
     .replace(/\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}일?/g, ' ')
     .replace(/\d{1,2}\s*월\s*\d{1,2}\s*일?/g, ' ')
     .replace(/(?:^|\s)\d{1,2}\/\d{1,2}(?=\s|$)/g, ' ')
@@ -194,10 +325,11 @@ export function localParsePlan(input: string, today: string, categories: Categor
     .replace(/(?:^|\s)(?:까지|부터|에|에서|에는)(?=\s|$)/g, ' ')
     .replace(/^\s*(?:까지|부터|에)\s*/, '')
     .replace(/\s*(?:하기로\s*함|해야\s*함|해야\s*돼|해야\s*해|할\s*것|하자|예정|등록|추가)\s*$/g, '')
+    .replace(/(?:^|\s)[~,]+(?=\s|$)/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s,.~·-]+|[\s,.~·-]+$/g, '')
     .trim();
-  if (!title) title = text;
+  if (!title) title = original;
 
   const priority: Priority = /급한|중요|반드시|필수|긴급|꼭/.test(text) ? 'high' : /여유|천천히|가볍게|틈틈이/.test(text) ? 'low' : 'medium';
   const startTime = times.start;
