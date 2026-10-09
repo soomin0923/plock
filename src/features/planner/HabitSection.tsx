@@ -46,7 +46,7 @@ export function HabitSection({ openSheet }: { openSheet: (s: PlanSheetState) => 
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-bold">{h.title}</span>
                     <span className="text-[13px] text-muted">
-                      {habitDaysLabel(h.days)} · 이번 달 {rate.total ? Math.round((rate.done / rate.total) * 100) : 0}%
+                      {habitDaysLabel(h)} · 이번 달 {rate.total ? Math.round((rate.done / rate.total) * 100) : 0}%
                     </span>
                   </span>
                   <span className={cx('inline-flex items-center gap-0.5 text-sm font-bold tabular', streak ? 'text-orange-500' : 'text-faint')}>

@@ -8,7 +8,7 @@ import { finishParseLog, recordFields } from '../../lib/parseLog';
 import { useToast } from '../../components/Toast';
 import { addDays, addMinutesHm, orderedWeekdays, today, weekday, WEEKDAYS_KR } from '../../lib/date';
 import { newId, nowIso, cx } from '../../lib/util';
-import { PRIORITY_META, sortCategories } from './helpers';
+import { monthDaysLabel, PRIORITY_META, sortCategories } from './helpers';
 import type { PlanDraft } from '../../lib/nlParser';
 
 export function CategoryPicker({ value, onChange, allowNone }: { value?: string; onChange: (id?: string) => void; allowNone?: boolean }) {
@@ -255,6 +255,12 @@ export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: b
     const days = h.days.includes(d) ? h.days.filter((x) => x !== d) : [...h.days, d].sort();
     if (days.length) set({ days });
   };
+  const monthly = !!h.monthDays?.length;
+  const toggleMonthDay = (m: number) => {
+    const cur = h.monthDays || [];
+    const next = cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m];
+    if (next.length) set({ monthDays: next.sort((a, b) => a - b) });
+  };
 
   const save = (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -273,8 +279,11 @@ export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: b
   return (
     <form onSubmit={save} className="space-y-4">
       <div className="flex gap-2">
-        <TextInput value={h.icon} onChange={(x) => set({ icon: Array.from(x.target.value).slice(-1)[0] || '🌱' })} className="w-14 text-center text-xl" aria-label="아이콘" />
-        <TextInput autoFocus={isNew} required placeholder="예: 물 2L 마시기" value={h.title} onChange={(x) => set({ title: x.target.value })} className="flex-1 text-base font-semibold" />
+        {/* TextInput is w-full, so the fixed width goes on a wrapper (else the icon box swallows the title). */}
+        <div className="w-14 flex-none">
+          <TextInput value={h.icon} onChange={(x) => set({ icon: Array.from(x.target.value).slice(-1)[0] || '🌱' })} className="text-center text-xl" aria-label="아이콘" />
+        </div>
+        <TextInput autoFocus={isNew} required placeholder="예: 물 2L 마시기" value={h.title} onChange={(x) => set({ title: x.target.value })} className="min-w-0 flex-1 text-base font-semibold" />
       </div>
       <div className="flex flex-wrap gap-1.5">
         {HABIT_ICONS.map((ic) => (
@@ -283,25 +292,44 @@ export function HabitForm({ initial, isNew, onDone }: { initial: Habit; isNew: b
           </button>
         ))}
       </div>
-      <Field label="반복 요일">
-        <div className="mb-2 flex gap-1.5">
+      <Field label="반복">
+        <div className="mb-2 flex flex-wrap gap-1.5">
           {[
             ['매일', [0, 1, 2, 3, 4, 5, 6]],
             ['평일', [1, 2, 3, 4, 5]],
             ['주말', [0, 6]],
           ].map(([label, days]) => (
-            <button key={label as string} type="button" onClick={() => set({ days: days as number[] })} className={cx('rounded-full border px-3 py-1 text-[13px] font-semibold', h.days.join() === (days as number[]).join() ? 'border-primary bg-primary-soft text-primary' : 'border-line-strong text-ink-soft')}>
+            <button key={label as string} type="button" onClick={() => set({ days: days as number[], monthDays: undefined })} className={cx('rounded-full border px-3 py-1 text-[13px] font-semibold', !monthly && h.days.join() === (days as number[]).join() ? 'border-primary bg-primary-soft text-primary' : 'border-line-strong text-ink-soft')}>
               {label as string}
             </button>
           ))}
+          <button type="button" onClick={() => !monthly && set({ monthDays: [-1] })} className={cx('rounded-full border px-3 py-1 text-[13px] font-semibold', monthly ? 'border-primary bg-primary-soft text-primary' : 'border-line-strong text-ink-soft')}>
+            매월
+          </button>
         </div>
-        <div className="grid grid-cols-7 gap-1.5">
-          {orderedWeekdays(prefs.weekStartsOn).map((d) => (
-            <button key={d} type="button" onClick={() => toggleDay(d)} className={cx('h-10 rounded-xl text-sm font-bold', h.days.includes(d) ? 'bg-primary text-on-primary' : 'bg-hover text-muted')}>
-              {WEEKDAYS_KR[d]}
-            </button>
-          ))}
-        </div>
+        {monthly ? (
+          <>
+            <div className="grid grid-cols-7 gap-1.5">
+              {Array.from({ length: 31 }, (_, i) => i + 1).map((m) => (
+                <button key={m} type="button" onClick={() => toggleMonthDay(m)} className={cx('h-9 rounded-xl text-sm font-bold', h.monthDays!.includes(m) ? 'bg-primary text-on-primary' : 'bg-hover text-muted')}>
+                  {m}
+                </button>
+              ))}
+              <button type="button" onClick={() => toggleMonthDay(-1)} className={cx('col-span-4 h-9 rounded-xl text-sm font-bold', h.monthDays!.includes(-1) ? 'bg-primary text-on-primary' : 'bg-hover text-muted')}>
+                말일
+              </button>
+            </div>
+            <p className="mt-1.5 text-[12px] text-muted">{monthDaysLabel(h.monthDays!)} · 그 달에 없는 날(예: 31일)은 말일로 옮겨요.</p>
+          </>
+        ) : (
+          <div className="grid grid-cols-7 gap-1.5">
+            {orderedWeekdays(prefs.weekStartsOn).map((d) => (
+              <button key={d} type="button" onClick={() => toggleDay(d)} className={cx('h-10 rounded-xl text-sm font-bold', h.days.includes(d) ? 'bg-primary text-on-primary' : 'bg-hover text-muted')}>
+                {WEEKDAYS_KR[d]}
+              </button>
+            ))}
+          </div>
+        )}
       </Field>
       <Field label="카테고리">
         <CategoryPicker value={h.categoryId} onChange={(categoryId) => set({ categoryId })} allowNone />
@@ -379,7 +407,7 @@ export function PlanSheet({ state, onClose }: { state: PlanSheetState; onClose: 
           initial={blankTask(d ? { title: d.title, dueDate: d.kind === 'task' ? d.dueDate : d.startDate, dueTime: d.kind === 'task' ? d.dueTime : d.startTime, priority: d.priority, categoryId: d.categoryId, memo: d.memo } : { dueDate: state.date })}
         />
       );
-    else body = <HabitForm key={key + kind} isNew onDone={done} initial={blankHabit(data.habits.length, d ? { title: d.title, days: d.days, categoryId: d.categoryId } : {})} />;
+    else body = <HabitForm key={key + kind} isNew onDone={done} initial={blankHabit(data.habits.length, d ? { title: d.title, days: d.days, ...(d.monthDays?.length ? { monthDays: d.monthDays } : {}), categoryId: d.categoryId } : {})} />;
   } else if (state?.mode === 'edit-event') {
     title = '일정';
     body = <EventForm key={key} isNew={false} initial={state.item} onDone={onClose} />;

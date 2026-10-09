@@ -52,6 +52,8 @@ export interface Habit extends BaseRecord {
   title: string;
   icon: string; // emoji
   days: number[]; // 0 = Sun ... 6 = Sat
+  /** Monthly habit: days of the month (1–31; -1 = the last day). When set, `days` is ignored. */
+  monthDays?: number[];
   categoryId?: string;
   doneDates: string[]; // YYYY-MM-DD
   order: number;

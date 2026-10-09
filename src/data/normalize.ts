@@ -79,11 +79,15 @@ const normalizers: { [K in CollectionName]: (r: Raw) => CollectionMap[K] } = {
 
   habits: (r): Habit => {
     const days = Array.isArray(r.days) ? (r.days as unknown[]).filter((d): d is number => typeof d === 'number' && d >= 0 && d <= 6) : [];
+    const monthDays = Array.isArray(r.monthDays)
+      ? Array.from(new Set((r.monthDays as unknown[]).filter((d): d is number => Number.isInteger(d) && ((d as number) === -1 || ((d as number) >= 1 && (d as number) <= 31))))).sort((a, b) => a - b)
+      : [];
     return {
       ...base(r),
       title: str(r.title, '습관'),
       icon: str(r.icon, '🌱'),
       days: days.length ? Array.from(new Set(days)).sort() : [0, 1, 2, 3, 4, 5, 6],
+      ...(monthDays.length ? { monthDays } : {}),
       categoryId: optStr(r.categoryId),
       doneDates: Array.from(new Set(strArr(r.doneDates).filter(isValidYmd))).sort(),
       order: num(r.order),

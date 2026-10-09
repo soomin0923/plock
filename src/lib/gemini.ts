@@ -243,11 +243,12 @@ ${context(today)}
 - "~부터 ~까지"는 startDate/endDate. 단일 날짜면 둘 다 같은 날.
 - task는 dueDate(마감일)와 dueTime(선택).
 - habit은 days: 0(일)~6(토) 숫자 배열. "매일"=[0..6], "평일"=[1..5], "주말"=[0,6].
+- 한 달에 한 번 반복("매월 15일", "매달 1일·15일", "매 달 마지막 날/말일")도 habit이고 monthDays에 날짜 배열(말일은 -1), days는 [].
 - title은 날짜/시간 표현과 조사를 뺀 핵심만 (예: "내일 오후 3시 팀 회의" → "팀 회의").
 - categoryId는 목록 중 가장 알맞은 id.
 
 반환 형식:
-{"kind":"event|task|habit","title":"","startDate":"","endDate":"","startTime":null,"endTime":null,"dueDate":null,"dueTime":null,"priority":"high|medium|low","days":[],"categoryId":"","memo":""}`;
+{"kind":"event|task|habit","title":"","startDate":"","endDate":"","startTime":null,"endTime":null,"dueDate":null,"dueTime":null,"priority":"high|medium|low","days":[],"monthDays":[],"categoryId":"","memo":""}`;
   const r = await generateJson<Record<string, unknown>>(system, [{ text }]);
   return sanitizePlan(r, today, categories);
 }
@@ -259,6 +260,9 @@ function sanitizePlan(r: Record<string, unknown>, today: string, categories: Cat
   const startDate = ymd(r.startDate) || ymd(r.dueDate) || today;
   const endDate = ymd(r.endDate) && ymd(r.endDate)! >= startDate ? ymd(r.endDate)! : startDate;
   const days = Array.isArray(r.days) ? r.days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6) : [];
+  const monthDays = Array.isArray(r.monthDays)
+    ? [...new Set(r.monthDays.filter((d): d is number => Number.isInteger(d) && (d === -1 || (d >= 1 && d <= 31))))].sort((a, b) => a - b)
+    : [];
   return {
     kind,
     title: String(r.title || '').trim() || '새 항목',
@@ -270,6 +274,7 @@ function sanitizePlan(r: Record<string, unknown>, today: string, categories: Cat
     dueTime: hm(r.dueTime),
     priority: r.priority === 'high' || r.priority === 'low' ? r.priority : 'medium',
     days: days.length ? days : [0, 1, 2, 3, 4, 5, 6],
+    ...(kind === 'habit' && monthDays.length ? { monthDays } : {}),
     categoryId: categories.some((c) => c.id === r.categoryId) ? String(r.categoryId) : categories[0]?.id || 'cat_etc',
     memo: typeof r.memo === 'string' ? r.memo : undefined,
     source: 'ai',

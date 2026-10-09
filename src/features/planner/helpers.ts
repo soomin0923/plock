@@ -1,5 +1,5 @@
 import type { Category, Habit, PlannerEvent, Task } from '../../types';
-import { addDays, diffDays, formatKoreanDate, relativeDayLabel, today, weekday, WEEKDAYS_KR } from '../../lib/date';
+import { addDays, diffDays, endOfMonth, formatKoreanDate, relativeDayLabel, today, weekday, WEEKDAYS_KR } from '../../lib/date';
 
 export const FALLBACK_CATEGORY: Category = { id: 'cat_none', name: '미분류', color: '#9a9289', order: 999, createdAt: '', updatedAt: '' };
 
@@ -40,11 +40,23 @@ export function eventTimeLabel(e: PlannerEvent, d?: string): string {
 }
 
 export function isHabitDay(h: Habit, d: string): boolean {
+  if (h.monthDays?.length) {
+    const dom = Number(d.slice(8, 10));
+    const last = Number(endOfMonth(d).slice(8, 10));
+    // "매월 31일" in a 30-day month falls on the last day.
+    return h.monthDays.some((m) => (m === -1 ? dom === last : dom === m || (m > last && dom === last)));
+  }
   return h.days.includes(weekday(d));
 }
 
-export function habitDaysLabel(days: number[]): string {
-  const s = [...days].sort();
+export function monthDaysLabel(monthDays: number[]): string {
+  const s = [...monthDays].sort((a, b) => (a === -1 ? 99 : a) - (b === -1 ? 99 : b));
+  return `매월 ${s.map((m) => (m === -1 ? '말일' : `${m}일`)).join('·')}`;
+}
+
+export function habitDaysLabel(h: Habit): string {
+  if (h.monthDays?.length) return monthDaysLabel(h.monthDays);
+  const s = [...h.days].sort();
   if (s.length === 7) return '매일';
   if (s.join() === '1,2,3,4,5') return '평일';
   if (s.join() === '0,6') return '주말';

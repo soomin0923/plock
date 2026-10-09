@@ -82,7 +82,7 @@ export function HabitRow({ h, date, onToggle, onClick, compact }: { h: Habit; da
       </button>
       <button onClick={onClick} className="min-w-0 flex-1 text-left">
         <p className={cx('truncate text-[15px] font-semibold', done && 'text-muted')}>{h.title}</p>
-        {!compact && <p className="text-[13px] text-muted">{habitDaysLabel(h.days)}</p>}
+        {!compact && <p className="text-[13px] text-muted">{habitDaysLabel(h)}</p>}
       </button>
       {streak > 0 && (
         <span className="inline-flex items-center gap-0.5 text-[13px] font-bold text-orange-500 tabular" title={`${streak}일 연속`}>

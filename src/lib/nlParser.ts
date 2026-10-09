@@ -15,6 +15,8 @@ export interface PlanDraft {
   dueTime?: string;
   priority: Priority;
   days: number[];
+  /** Monthly habit (1–31, -1 = last day). */
+  monthDays?: number[];
   categoryId: string;
   memo?: string;
   source: 'ai' | 'local';
@@ -278,6 +280,17 @@ function guessCategory(text: string, categories: Category[]): string {
   return categories.find((c) => c.id === 'cat_personal')?.id || categories[0]?.id || 'cat_etc';
 }
 
+/** 매월 15일 → [15], 매달 1일·15일 → [1, 15], 매 달 말일 / 마지막 날 / 월말 → [-1]. No day given → the 1st. */
+function parseMonthDays(text: string): number[] {
+  const out = new Set<number>();
+  if (/말일|마지막\s*날|월말/.test(text)) out.add(-1);
+  for (const m of text.matchAll(/(\d{1,2})\s*일/g)) {
+    const n = Number(m[1]);
+    if (n >= 1 && n <= 31) out.add(n);
+  }
+  return out.size ? [...out].sort((a, b) => a - b) : [1];
+}
+
 function parseHabitDays(text: string): number[] {
   if (/평일/.test(text)) return [1, 2, 3, 4, 5];
   if (/주말/.test(text)) return [0, 6];
@@ -341,7 +354,8 @@ export function localParsePlan(input: string, today: string, categories: Categor
   startDate = startDate || today;
   endDate = endDate && endDate >= startDate ? endDate : startDate;
 
-  const isHabit = /매일|매주|마다|루틴|습관|꾸준히|평일|(?:^|\s)[월화수목금토일]{2,}(?=\s|$)/.test(text);
+  const monthly = /매\s*(?:달|월)/.test(text);
+  const isHabit = monthly || /매일|매주|마다|루틴|습관|꾸준히|평일|(?:^|\s)[월화수목금토일]{2,}(?=\s|$)/.test(text);
   // Things you hand in or pay by a time are to-dos even with a clock time ("밤 11시 과제 마감").
   const isDueWord = /마감|제출|납부|접수|입금|송금|정산/.test(text);
   const isTaskWord = /해야|하기$|신청하기|예약하기|사기|보내기|할\s*일|챙기기|끝내기/.test(text);
@@ -372,6 +386,7 @@ export function localParsePlan(input: string, today: string, categories: Categor
     .replace(/\d+\s*(?:일|주)\s*(?:뒤|후)/g, ' ')
     .replace(/(?:^|\s)\d{1,2}\s*일(?=\s|$|까지|부터|에)/g, ' ')
     .replace(/오늘|내일\s*모레|내일|모레|글피|어제|그저께|그제/g, ' ')
+    .replace(/매\s*(?:달|월)\s*(?:(?:\d{1,2}\s*일[,·\s]*)+|말일|마지막\s*날|월말)?(?:\s*에)?/g, ' ')
     .replace(/매일|매주|평일마다|주말마다|평일|주말|[월화수목금토일]+마다|마다/g, ' ')
     .replace(/(?:^|\s)(?:까지|부터|에|에서|에는)(?=\s|$)/g, ' ')
     .replace(/^\s*(?:까지|부터|에)(?=\s|$)\s*/, '')
@@ -397,6 +412,7 @@ export function localParsePlan(input: string, today: string, categories: Categor
     dueTime: kind === 'task' ? startTime : undefined,
     priority,
     days: kind === 'habit' ? parseHabitDays(text) : [0, 1, 2, 3, 4, 5, 6],
+    ...(kind === 'habit' && monthly ? { monthDays: parseMonthDays(text) } : {}),
     categoryId: guessCategory(text, categories),
     source: 'local',
   };
