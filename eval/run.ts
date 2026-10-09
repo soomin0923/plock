@@ -34,6 +34,8 @@ const opt = (name: string, fallback: string) => {
 const bareCsv = args.find((a, i) => /\.csv$/i.test(a) && !args[i - 1]?.startsWith('--'));
 const DATA = opt('data', bareCsv ?? 'eval/dataset.csv');
 const USE_LLM = flag('llm');
+// Held-out set: keep sentence text out of summary.md so the numbers can be shared without leaking the test.
+const BLIND = flag('blind');
 const DELAY_MS = Number(opt('delay', '4500')); // free tier ≈ 15 requests/min
 const MODEL = process.env.GEMINI_MODEL || '';
 
@@ -372,17 +374,19 @@ async function main() {
     );
   }
 
+  const wrongLines: string[] = [];
   lines.push('', '## 틀린 문장', '');
+  if (BLIND) lines.push('(--blind: 시험용 문장은 공유용 요약에 넣지 않습니다. 본인만 `wrong.md`, `rows.csv`에서 확인하세요.)', '');
   for (const m of modes) {
     const wrong = rows.filter((r) => !scored(r.g).every((f) => correct(r.g, r.pred[m] ?? null, f)));
-    lines.push(`### ${m} (${wrong.length}건)`, '', '| id | 문장 | 정답 | 예측 | 틀린 필드 |', '|---|---|---|---|---|');
+    (BLIND ? wrongLines : lines).push(`### ${m} (${wrong.length}건)`, '', '| id | 문장 | 정답 | 예측 | 틀린 필드 |', '|---|---|---|---|---|');
     for (const r of wrong) {
       const p = r.pred[m] ?? null;
       const bad = scored(r.g).filter((f) => !correct(r.g, p, f));
       const fmt = (x: Partial<Fields> | null) => (x ? `${x.kind} ${x.date ?? '-'} ${x.start_time ?? ''}${x.end_date ? `~${x.end_date}` : ''}`.trim() : '실패');
-      lines.push(`| ${r.g.id} | ${r.g.text.replace(/\|/g, '/')} | ${fmt(r.g)} | ${fmt(p)}${m === 'llm' && r.llmError ? ` (${r.llmError})` : ''} | ${bad.join(', ')} |`);
+      (BLIND ? wrongLines : lines).push(`| ${r.g.id} | ${r.g.text.replace(/\|/g, '/')} | ${fmt(r.g)} | ${fmt(p)}${m === 'llm' && r.llmError ? ` (${r.llmError})` : ''} | ${bad.join(', ')} |`);
     }
-    lines.push('');
+    (BLIND ? wrongLines : lines).push('');
   }
 
   // ---- files
@@ -400,6 +404,7 @@ async function main() {
   ]);
   fs.writeFileSync(path.join(outDir, 'rows.csv'), '﻿' + [header, ...body].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n');
   fs.writeFileSync(path.join(outDir, 'summary.md'), lines.join('\n') + '\n');
+  if (BLIND) fs.writeFileSync(path.join(outDir, 'wrong.md'), ['# 틀린 문장 (공유 금지)', '', ...wrongLines].join('\n') + '\n');
 
   console.log('\n' + lines.slice(0, lines.indexOf('## 틀린 문장')).join('\n'));
   console.log(`\n저장: ${outDir}/summary.md, rows.csv`);

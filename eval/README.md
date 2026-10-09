@@ -66,7 +66,8 @@ npm run eval -- --data eval/dataset.csv
 set GEMINI_API_KEY=AIza...여기에_키
 npm run eval -- --data eval/dataset.csv --llm
 ```
-- 짧은 명령: `npm run eval:dev` (= `dataset.csv`, `--strict`), `npm run eval:test` (= `test.csv`, `--strict`). LLM까지는 `npm run eval:test -- --llm`.
+- 짧은 명령: `npm run eval:dev` (= `dataset.csv`, `--strict`), `npm run eval:test` (= `holdout.csv`, `--strict --blind`). LLM까지는 `npm run eval:test -- --llm`.
+- `--blind`: 시험용(holdout) 결과의 `summary.md`에는 문장을 넣지 않고, 틀린 문장은 `wrong.md`에만 씁니다. **시험 문장은 파서를 고치는 쪽(사람이든 AI든)에게 보여 주지 마세요.** 보여 주는 순간 시험 점수가 아니게 됩니다.
 - 첫 줄의 `데이터 …`가 원하는 파일인지 확인하세요. PowerShell은 `--`를 지워 버려서 옵션이 npm에 먹히는데, 이제는 그 경우도 읽습니다.
 - PowerShell에서는 `$env:GEMINI_API_KEY="AIza..."`로 키를 넣습니다.
 - 모델을 고정하려면 `set GEMINI_MODEL=gemini-…`를 씁니다. 없으면 앱처럼 최신 Flash 모델을 자동으로 고릅니다.
