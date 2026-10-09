@@ -18,25 +18,29 @@ import { DEFAULT_CATEGORIES } from '../src/data/defaults';
 import type { ParseFields, ParseLog } from '../src/types';
 
 const args = process.argv.slice(2);
-// Without a path, take the newest plock-parse-logs-*.jsonl from the user's Downloads folder.
-const downloads = path.join(os.homedir(), 'Downloads');
-const found = (() => {
-  try {
-    return fs
-      .readdirSync(downloads)
-      .filter((f) => /^plock-parse-logs.*\.jsonl$/i.test(f))
-      .map((f) => path.join(downloads, f))
-      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-  } catch {
-    return [];
-  }
-})();
-const given = args.find((a) => /\.jsonl$/i.test(a)) || process.env.npm_config_data;
-const file = given ?? found[0];
+
+// A path with spaces ("…\plock-parse-logs-20261009 (1).csv") arrives split in pieces when it isn't
+// quoted: everything up to the first --option is the path.
+const optStart = args.findIndex((a) => a.startsWith('--'));
+const given = (optStart < 0 ? args : args.slice(0, optStart)).join(' ').trim() || process.env.npm_config_data || '';
+
+// Without a path, take the newest export (.jsonl or .csv) from the Downloads folders we can find.
+const home = os.homedir();
+const downloadDirs = [...new Set([path.join(home, 'Downloads'), ...'CDEFG'.split('').map((d) => `${d}:\\Users\\${path.basename(home)}\\Downloads`)])];
+const found = downloadDirs
+  .flatMap((dir) => {
+    try {
+      return fs.readdirSync(dir).filter((f) => /^plock-parse-logs.*\.(jsonl|csv)$/i.test(f)).map((f) => path.join(dir, f));
+    } catch {
+      return [];
+    }
+  })
+  .sort((x, y) => fs.statSync(y).mtimeMs - fs.statSync(x).mtimeMs || (/\.jsonl$/i.test(x) ? -1 : 1));
+const file = given || found[0];
 if (!file || !fs.existsSync(file)) {
-  console.error(given ? `파일이 없습니다: ${given}` : `${downloads}에서 plock-parse-logs-*.jsonl을 찾지 못했습니다.`);
-  if (found.length) console.error(`다운로드 폴더에 있는 파일:\n- ${found.join('\n- ')}`);
-  console.error('사용법: npm run eval:replay -- [jsonl 경로] [--before 2026-10-09T22:10]  (경로를 빼면 다운로드 폴더의 최신 파일)');
+  console.error(given ? `파일이 없습니다: ${given}` : `다운로드 폴더(${downloadDirs.filter((d) => fs.existsSync(d)).join(', ')})에서 plock-parse-logs 파일을 찾지 못했습니다.`);
+  if (found.length) console.error(`찾은 파일:\n- ${found.join('\n- ')}`);
+  console.error('사용법: npm run eval:replay -- [.jsonl 또는 .csv 경로] [--before 2026-10-09T22:10]  (경로를 빼면 다운로드 폴더의 최신 파일)');
   process.exit(1);
 }
 console.log(`파일: ${file}`);
@@ -48,12 +52,92 @@ const before = (() => {
   return v && v !== 'true' ? new Date(v).toISOString() : null;
 })();
 
-const allLogs: ParseLog[] = fs
-  .readFileSync(file, 'utf8')
-  .replace(/^﻿/, '')
-  .split(/\r?\n/)
-  .filter((l) => l.trim())
-  .map((l) => JSON.parse(l));
+// ---- read .jsonl, or the .csv twin (also after Excel re-saved it: CP949, 2026/10/9, 9:00)
+function readText(f: string): string {
+  const buf = fs.readFileSync(f);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('euc-kr').decode(buf);
+  }
+}
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"' && text[i + 1] === '"') (cell += '"'), i++;
+      else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') row.push(cell), (cell = '');
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell), rows.push(row), (row = []), (cell = '');
+    } else cell += c;
+  }
+  if (cell || row.length) row.push(cell), rows.push(row);
+  return rows.filter((r) => r.some((x) => x.trim()));
+}
+const pad2 = (x: string | number) => String(x).padStart(2, '0');
+const nDate = (v?: string) => {
+  const m = v?.trim().match(/^(\d{4})[-/.]\s*(\d{1,2})[-/.]\s*(\d{1,2})/);
+  return m ? `${m[1]}-${pad2(m[2])}-${pad2(m[3])}` : undefined;
+};
+const nTime = (v?: string) => {
+  const m = v?.trim().match(/^(오전|오후|AM|PM)?\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!m) return undefined;
+  let h = Number(m[2]);
+  const ap = (m[1] || m[4] || '').toUpperCase();
+  if ((ap === '오후' || ap === 'PM') && h < 12) h += 12;
+  if ((ap === '오전' || ap === 'AM') && h === 12) h = 0;
+  return `${pad2(h)}:${m[3]}`;
+};
+function fromCsv(text: string): ParseLog[] {
+  const [header, ...rows] = parseCsv(text.replace(/^﻿/, ''));
+  const col = (name: string) => header.findIndex((h) => h.trim() === name);
+  const get = (r: string[], name: string) => {
+    const i = col(name);
+    return i >= 0 && r[i]?.trim() ? r[i].trim() : undefined;
+  };
+  const fields = (r: string[], p: string): ParseFields | undefined =>
+    get(r, `${p}_kind`)
+      ? { kind: get(r, `${p}_kind`), title: get(r, `${p}_title`), date: nDate(get(r, `${p}_date`)), endDate: nDate(get(r, `${p}_end_date`)), startTime: nTime(get(r, `${p}_start_time`)), endTime: nTime(get(r, `${p}_end_time`)) }
+      : undefined;
+  return rows.map((r) => {
+    const created = get(r, 'created_at');
+    const createdIso = created ? (() => { const m = created.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/); return m ? `${m[1]}-${pad2(m[2])}-${pad2(m[3])}T${pad2(m[4])}:${m[5]}:${m[6] || '00'}.000Z` : created; })() : '';
+    return {
+      id: get(r, 'id') || '',
+      createdAt: createdIso,
+      updatedAt: createdIso,
+      surface: get(r, 'surface'),
+      task: get(r, 'task'),
+      input: get(r, 'input') || '',
+      refDate: nDate(get(r, 'ref_date')) || '',
+      refTime: nTime(get(r, 'ref_time')) || '',
+      mode: get(r, 'mode'),
+      outcome: get(r, 'outcome'),
+      error: get(r, 'error'),
+      changed: get(r, 'changed')?.split(','),
+      predicted: fields(r, 'pred') || {},
+      final: fields(r, 'final'),
+      appVersion: get(r, 'app_version') || '',
+    } as unknown as ParseLog;
+  });
+}
+
+const raw = readText(file);
+const allLogs: ParseLog[] = /\.csv$/i.test(file)
+  ? fromCsv(raw)
+  : raw
+      .replace(/^﻿/, '')
+      .split(/\r?\n/)
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l));
 const logs = before ? allLogs.filter((l) => l.createdAt < before) : allLogs;
 const versions = allLogs.reduce<Record<string, number>>((m, l) => ((m[l.appVersion || '?'] = (m[l.appVersion || '?'] || 0) + 1), m), {});
 
