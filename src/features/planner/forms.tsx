@@ -374,7 +374,9 @@ export function PlanSheet({ state, onClose }: { state: PlanSheetState; onClose: 
           key={key + kind}
           isNew
           onDone={done}
-          initial={blankTask(d ? { title: d.title, dueDate: d.dueDate ?? d.startDate, dueTime: d.dueTime ?? d.startTime, priority: d.priority, categoryId: d.categoryId, memo: d.memo } : { dueDate: state.date })}
+          // A to-do parsed without a date stays undated: not every to-do is for today.
+          // (An event draft switched to 할 일 keeps the date the sentence gave.)
+          initial={blankTask(d ? { title: d.title, dueDate: d.kind === 'task' ? d.dueDate : d.startDate, dueTime: d.kind === 'task' ? d.dueTime : d.startTime, priority: d.priority, categoryId: d.categoryId, memo: d.memo } : { dueDate: state.date })}
         />
       );
     else body = <HabitForm key={key + kind} isNew onDone={done} initial={blankHabit(data.habits.length, d ? { title: d.title, days: d.days, categoryId: d.categoryId } : {})} />;
