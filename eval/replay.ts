@@ -216,6 +216,20 @@ const lines = [
   '',
   ...table('전체', rows),
   ...modes.filter((m) => rows.some((r) => r.l.mode === m)).flatMap((m) => table(`그때 방식: ${m === 'ai' ? 'Gemini' : m === 'local' ? '규칙' : '규칙 (AI 실패 후 대체)'}`, rows.filter((r) => r.l.mode === m))),
+  // The prediction logged "back then" depends on the app version that made it.
+  ...[...new Set(rows.map((r) => r.l.appVersion || '?'))].sort().flatMap((v) => table(`그때 앱 버전: ${v}`, rows.filter((r) => (r.l.appVersion || '?') === v))),
+  '## AI 호출',
+  '',
+  ...(() => {
+    const tried = plan.filter((l) => l.mode === 'ai' || l.mode === 'local_fallback');
+    if (!tried.length) return ['AI를 시도한 기록이 없습니다 (키 없이 사용).', ''];
+    const errs = tried.filter((l) => l.mode === 'local_fallback').reduce<Record<string, number>>((m, l) => ((m[l.error || '(메시지 없음)'] = (m[l.error || '(메시지 없음)'] || 0) + 1), m), {});
+    return [
+      `- AI 시도 ${tried.length}건 중 성공 ${tried.length - Object.values(errs).reduce((a, b) => a + b, 0)}건 (${pct(tried.filter((l) => l.mode === 'ai').length, tried.length)})`,
+      ...Object.entries(errs).sort((a, b) => b[1] - a[1]).map(([e, n]) => `- 실패 ${n}건: ${e}`),
+      '',
+    ];
+  })(),
   '## 읽는 법',
   '',
   '- 정답은 사용자가 저장한 값입니다. 예측이 틀렸는데 그냥 저장했다면 틀린 값이 정답이 되므로, "그때 앱의 예측"이 유리합니다.',
