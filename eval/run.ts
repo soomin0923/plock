@@ -112,6 +112,20 @@ function loadDataset(file: string): Gold[] {
     return g;
   });
   if (problems.length) throw new Error(`라벨 형식 오류 ${problems.length}건\n- ${problems.join('\n- ')}`);
+
+  // Labels that are valid but probably not what was meant (scored anyway).
+  const warnings: string[] = [];
+  out.forEach((g, n) => {
+    const where = `${n + 2}행 (${g.text})`;
+    if (/\d{1,2}\s*시|\d{1,2}:\d{2}/.test(g.text) && !g.start_time && g.kind !== 'habit') warnings.push(`${where}: 문장에 시각이 있는데 start_time이 비어 있음`);
+    if (g.kind === 'task' && g.end_date && !g.date) warnings.push(`${where}: 할 일의 마감일은 date 칸에 (end_date는 여러 날 일정용)`);
+    if (g.kind === 'habit' && !/매일|매주|마다|평일|주말마다|[월화수목금토일]{2,}(?=\s|$)|루틴|습관/.test(g.text)) warnings.push(`${where}: 반복 표현이 없는데 habit`);
+    if (g.end_date && g.date && g.end_date < g.date) warnings.push(`${where}: end_date가 date보다 빠름`);
+  });
+  if (warnings.length) {
+    console.warn(`\n라벨 확인 필요 ${warnings.length}건 (그대로 채점은 합니다)\n- ${warnings.join('\n- ')}\n`);
+    if (flag('strict')) throw new Error('--strict: 위 항목을 고친 뒤 다시 실행하세요.');
+  }
   return out;
 }
 
