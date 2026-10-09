@@ -141,6 +141,9 @@ function loadDataset(file: string): Gold[] {
     const hours = [...g.text.matchAll(/(\d{1,2})\s*시|(\d{1,2}):\d{2}|(\d{1,2})\s*[~-]\s*\d{1,2}\s*시/g)].map((m) => Number(m[1] ?? m[2] ?? m[3]) % 12);
     if (g.start_time && hours.length && !hours.includes(Number(g.start_time.slice(0, 2)) % 12))
       warnings.push(`${where}: 문장의 시각과 start_time(${g.start_time})의 시가 다름`);
+    // No word in the sentence that could carry a date: the date must have come from a labeling habit.
+    if (g.date && !/오늘|내일|낼|모레|글피|이따|요일|욜|주말|평일|담주|이번|다음|\d|말까지|뒤|후|아침|점심|저녁|밤|새벽|오전|오후|낮|퇴근|출근|자정|정오|연휴|[월화수목금토일](?=\s|$)/.test(g.text))
+      warnings.push(`${where}: 문장에 날짜·시간대 표현이 없는데 date(${g.date})가 있음`);
     if (g.start_time === '12:00' && /밤\s*12\s*시|자정/.test(g.text)) warnings.push(`${where}: 밤 12시는 00:00 (다음 날)`);
     if (g.date && /주말(?!마다)/.test(g.text) && ![0, 6].includes(new Date(`${g.date}T00:00:00Z`).getUTCDay()))
       warnings.push(`${where}: '주말'인데 date(${g.date})가 토·일이 아님`);
