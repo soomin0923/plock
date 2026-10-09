@@ -10,7 +10,8 @@ import { today, nowHm } from './date';
 
 // Bump when parsing behaviour changes, so logs can be split by the parser that produced them.
 // 2026.10.2: rule parser reads casual forms (낼, 담주, 화욜, 주말, ranges, spans).
-export const APP_VERSION = '2026.10.2';
+// 2026.10.3: named days (크리스마스, 추석 …), 주말까지 = Sunday; AI service choice + fallback.
+export const APP_VERSION = '2026.10.3';
 
 type Sink = (log: ParseLog) => void;
 let sink: Sink | null = null;

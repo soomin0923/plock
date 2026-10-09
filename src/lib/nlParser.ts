@@ -1,5 +1,6 @@
 import type { Category, LedgerCategory, LedgerType, PayMethod, Priority } from '../types';
 import { addDays, addMinutesHm, addMonths, startOfWeek, weekday, ymd, parseYmd } from './date';
+import { holidaysOfYear } from './holidays';
 
 // Rule-based Korean parser used when the user has no Gemini key (or the AI call fails).
 
@@ -68,6 +69,49 @@ export function normalizeKorean(input: string): string {
   // Hour ranges: 15~17시 → 15시~17시
   t = t.replace(/(\d{1,2})\s*~\s*(\d{1,2})\s*시/g, '$1시~$2시');
   return t.replace(/\s+/g, ' ').trim();
+}
+
+const FIXED_DAYS: [RegExp, string][] = [
+  [/(?:크리스마스|성탄절?)\s*이브/, '12-24'],
+  [/크리스마스|성탄절/, '12-25'],
+  [/신정|새해\s*첫\s*날/, '01-01'],
+  [/삼일절/, '03-01'],
+  [/어린이\s*날/, '05-05'],
+  [/어버이\s*날/, '05-08'],
+  [/현충일/, '06-06'],
+  [/광복절/, '08-15'],
+  [/개천절/, '10-03'],
+  [/한글날/, '10-09'],
+  [/할로윈|핼러윈/, '10-31'],
+  [/빼빼로\s*데이/, '11-11'],
+  [/발렌타인\s*데이/, '02-14'],
+  [/화이트\s*데이/, '03-14'],
+  [/제야|섣달\s*그믐|마지막\s*날\s*밤/, '12-31'],
+];
+const LUNAR_DAYS: [RegExp, string][] = [
+  [/설날|설\s*연휴|구정/, '설날'],
+  [/추석|한가위/, '추석'],
+  [/부처님\s*오신\s*날|석가탄신일/, '부처님오신날'],
+];
+
+/** 크리스마스, 어린이날, 추석 … → the next such day on or after base. Lunar days use the holiday table. */
+function namedDay(t: string, base: string): string | null {
+  const year = parseYmd(base).getFullYear();
+  for (const [re, md] of FIXED_DAYS) {
+    if (!re.test(t)) continue;
+    const d = `${year}-${md}`;
+    return d >= base ? d : `${year + 1}-${md}`;
+  }
+  for (const [re, name] of LUNAR_DAYS) {
+    if (!re.test(t)) continue;
+    for (const y of [year, year + 1]) {
+      const days = [...holidaysOfYear(y)].filter(([, n]) => n.includes(name)).map(([d]) => d).sort();
+      // 설날·추석 are three days off; the day itself is the middle one.
+      const day = days.length >= 3 ? days[1] : days[0];
+      if (day && day >= base) return day;
+    }
+  }
+  return null;
 }
 
 function nthWeekdayOfMonth(year: number, month0: number, dow: number, n: number): string {
@@ -154,6 +198,11 @@ export function resolveKoreanDate(expr: string, base: string, contextMonth?: num
     if (ymd(d) < addDays(base, -60)) d = new Date(b.getFullYear() + 1, Number(md[1]) - 1, Number(md[2]));
     return ymd(d);
   }
+
+  // Named days: 크리스마스 이브, 어린이날, 추석 … (the next one on or after base).
+  // After written dates, so "12월 24일 크리스마스 파티" keeps the 24th.
+  const named = namedDay(t, base);
+  if (named) return named;
 
   // 다음 달 15일
   const relMonthDay = t.match(/(이번|다음|다다음)\s*달\s*(\d{1,2})\s*일/);
@@ -273,6 +322,8 @@ export function localParsePlan(input: string, today: string, categories: Categor
     const until = text.match(/(.+?)\s*까지/);
     if (until) {
       startDate = resolveKoreanDate(until[1], today);
+      // "주말까지" means by the end of the weekend: Sunday, not Saturday.
+      if (startDate && /주말/.test(until[1]) && weekday(startDate) === 6) startDate = addDays(startDate, 1);
       deadline = !!startDate;
     }
   }
@@ -310,8 +361,8 @@ export function localParsePlan(input: string, today: string, categories: Categor
   title = title
     .replace(/(이번\s*주|다음\s*주|다다음\s*주)?\s*[월화수목금토일]요일/g, ' ')
     .replace(/(?:\d{1,2}\s*월|(?:이번|다음|다다음)\s*달)\s*(?:첫째|첫|둘째|셋째|넷째|다섯째|마지막)\s*주?/g, ' ')
-    .replace(/(?:\d{1,2}\s*월\s*|(?:이번|다음|다다음)\s*달\s*)?말(?=까지|에|\s|$)|월말/g, ' ')
     .replace(/(?:이번|다음|다다음)?\s*주\s*주말|(?:이번|다음|다다음)\s*주말|주말(?!\s*마다)/g, ' ')
+    .replace(/(?:\d{1,2}\s*월\s*|(?:이번|다음|다다음)\s*달\s*)?말(?=까지|에|\s|$)|월말/g, ' ')
     .replace(/(?:이번|다음|다다음)\s*(?:주|달)/g, ' ')
     .replace(/\d+\s*일\s*(?:간|동안)|\d+\s*달\s*(?:뒤|후)/g, ' ')
     .replace(/이따가?/g, ' ')
@@ -323,7 +374,7 @@ export function localParsePlan(input: string, today: string, categories: Categor
     .replace(/오늘|내일\s*모레|내일|모레|글피|어제|그저께|그제/g, ' ')
     .replace(/매일|매주|평일마다|주말마다|평일|주말|[월화수목금토일]+마다|마다/g, ' ')
     .replace(/(?:^|\s)(?:까지|부터|에|에서|에는)(?=\s|$)/g, ' ')
-    .replace(/^\s*(?:까지|부터|에)\s*/, '')
+    .replace(/^\s*(?:까지|부터|에)(?=\s|$)\s*/, '')
     .replace(/\s*(?:하기로\s*함|해야\s*함|해야\s*돼|해야\s*해|할\s*것|하자|예정|등록|추가)\s*$/g, '')
     .replace(/(?:^|\s)[~,]+(?=\s|$)/g, ' ')
     .replace(/\s+/g, ' ')

@@ -169,7 +169,7 @@ const eq = (a: F, b: F, f: (typeof FIELDS)[number]) => a[f] === b[f];
 
 // A value the user filled in that the sentence never mentioned (a to-do saved with the form's
 // default date, a time picked for "새벽까지") is not something a parser could have read: not scored.
-const DATE_WORDS = /오늘|내일|낼|모레|글피|이따|요일|욜|주말|평일|담주|이번|다음|\d|말까지|뒤|후|아침|점심|저녁|밤|새벽|오전|오후|낮|퇴근|출근|자정|정오|연휴|[월화수목금토일](?=\s|$)/;
+const DATE_WORDS = /크리스마스|성탄|신정|새해|설날|설\s*연휴|구정|추석|한가위|어린이\s*날|어버이\s*날|현충일|광복절|개천절|한글날|삼일절|할로윈|핼러윈|빼빼로|발렌타인|화이트\s*데이|부처님|제야|연말|연초|오늘|내일|낼|모레|글피|이따|요일|욜|주말|평일|담주|이번|다음|\d|말까지|뒤|후|아침|점심|저녁|밤|새벽|오전|오후|낮|퇴근|출근|자정|정오|연휴|[월화수목금토일](?=\s|$)/;
 const TIME_WORDS = /\d{1,2}\s*시|\d{1,2}:\d{2}|(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|열한|열두)\s*시(?![간작])/;
 function addedByUser(l: ParseLog, gold: F): Set<(typeof FIELDS)[number]> {
   const out = new Set<(typeof FIELDS)[number]>();
@@ -205,7 +205,7 @@ const lines = [
   '',
   `- 파일: \`${path.basename(file)}\``,
   `- 앱 버전별 기록: ${Object.entries(versions).map(([k, v]) => `${k} ${v}건`).join(', ')}${before ? ` · ${before} 이전 것만 사용` : ''}`,
-  '- 2026.10 = 이전 규칙 파서, 2026.10.2 이후 = 개선한 규칙 파서. "그때 앱의 예측"에 두 버전이 섞이면 --before로 나누세요.',
+  '- 2026.10 = 이전 규칙 파서, 2026.10.2 = 개선한 규칙 파서, 2026.10.3 = 명절 이름·주말까지 추가 + AI 서비스 선택. "그때 앱의 예측"에 두 버전이 섞이면 --before로 나누세요.',
   `- 기간: ${plan.map((l) => l.refDate).sort()[0] ?? '-'} ~ ${plan.map((l) => l.refDate).sort().at(-1) ?? '-'}`,
   `- 일정 파싱 기록 ${plan.length}건: ${Object.entries(byOutcome).map(([k, v]) => `${k} ${v}`).join(', ')}`,
   `- 채점 대상: 저장된 ${saved.length}건 (저장한 최종 값을 정답으로 봄. 취소·되돌리기는 제외)`,
