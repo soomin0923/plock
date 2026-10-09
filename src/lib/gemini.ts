@@ -15,6 +15,8 @@ export class GeminiError extends Error {
   constructor(
     message: string,
     public status?: number,
+    /** For 429: Google's quota id (e.g. "...PerDay...") and suggested wait, when the response says. */
+    public quota?: { id?: string; retryAfterMs?: number },
   ) {
     super(message);
   }
@@ -36,15 +38,22 @@ async function call<T>(path: string, init: RequestInit, key: string): Promise<T>
   }
   if (!res.ok) {
     let msg = '';
+    let quota: { id?: string; retryAfterMs?: number } | undefined;
     try {
       const body = await res.json();
       msg = body?.error?.message || '';
+      const details: { '@type'?: string; retryDelay?: string; violations?: { quotaId?: string }[] }[] = body?.error?.details || [];
+      const delay = details.find((d) => d.retryDelay)?.retryDelay;
+      quota = {
+        id: details.flatMap((d) => d.violations || []).find((v) => v.quotaId)?.quotaId,
+        retryAfterMs: delay ? Math.ceil(parseFloat(delay) * 1000) : undefined,
+      };
     } catch {
       /* ignore */
     }
     if (res.status === 400 && /api key/i.test(msg)) throw new GeminiError('API 키가 올바르지 않습니다. 설정에서 다시 확인해 주세요.', 400);
     if (res.status === 403) throw new GeminiError('이 API 키로는 Gemini를 사용할 수 없습니다. (권한 없음)', 403);
-    if (res.status === 429) throw new GeminiError('Gemini 사용 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.', 429);
+    if (res.status === 429) throw new GeminiError('Gemini 사용 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.', 429, quota);
     if (res.status === 404) throw new GeminiError('선택한 모델을 찾을 수 없습니다.', 404);
     throw new GeminiError(msg || `Gemini 요청 실패 (${res.status})`, res.status);
   }

@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { localParsePlan, resolveKoreanDate, type PlanDraft } from '../src/lib/nlParser';
-import { aiParsePlan, lastModelUsed } from '../src/lib/gemini';
+import { aiParsePlan, lastModelUsed, listModels, GeminiError } from '../src/lib/gemini';
 import { setDeviceSettings } from '../src/lib/deviceSettings';
 import { DEFAULT_CATEGORIES } from '../src/data/defaults';
 
@@ -196,12 +196,17 @@ function saveCache(c: Record<string, CacheEntry>) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Set once the free daily quota is used up: no more calls this run (the rest stay uncached). */
+let stopReason: string | null = null;
+let consecutiveFails = 0;
+
 async function llmParse(g: Gold, cache: Record<string, CacheEntry>): Promise<CacheEntry> {
   const key = `${g.ref_date}|${g.text}`;
   // Only successful answers are reused; failed calls are retried on the next run.
   if (cache[key]?.draft) return cache[key];
+  if (stopReason) return { draft: null, error: `건너뜀 (${stopReason})`, latencyMs: 0 };
   let entry: CacheEntry = { draft: null, latencyMs: 0 };
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const t0 = performance.now();
     try {
       const draft = await aiParsePlan(g.text, g.ref_date, DEFAULT_CATEGORIES);
@@ -209,17 +214,29 @@ async function llmParse(g: Gold, cache: Record<string, CacheEntry>): Promise<Cac
       break;
     } catch (e) {
       const status = (e as { status?: number }).status;
+      const quota = e instanceof GeminiError ? e.quota : undefined;
       entry = { draft: null, error: (e as Error).message, latencyMs: Math.round(performance.now() - t0) };
       if (status !== 429 && status !== 503) break;
-      const wait = 20000 * (attempt + 1);
-      process.stdout.write(`  (${status === 429 ? '한도 초과' : '서버 혼잡'}, ${wait / 1000}초 대기 후 재시도)\n`);
+      // A per-day quota does not come back by waiting minutes: stop asking and let the next run continue.
+      if (status === 429 && /PerDay/i.test(quota?.id || '')) {
+        stopReason = `하루 무료 한도 소진: ${quota?.id}`;
+        break;
+      }
+      // Per-minute limit or overload: wait as long as Google says (or 15s/30s), then retry.
+      const wait = Math.min((quota?.retryAfterMs ?? 15000 * (attempt + 1)) + 1000, 65000);
+      process.stdout.write(`  (${status === 429 ? '분당 한도' : '서버 혼잡'}${quota?.id ? ` ${quota.id}` : ''}, ${Math.round(wait / 1000)}초 대기 후 재시도)\n`);
       await sleep(wait);
     }
   }
   if (entry.draft) {
     cache[key] = entry;
     saveCache(cache);
+    consecutiveFails = 0;
+  } else if (++consecutiveFails >= 3 && !stopReason) {
+    // Three sentences in a row failed even after retrying: almost always the daily quota.
+    stopReason = '연속 3문장 실패 (하루 한도를 다 쓴 것으로 보입니다)';
   }
+  if (stopReason) process.stdout.write(`  ⛔ ${stopReason}. 남은 문장은 건너뛰고 결과를 저장합니다.\n`);
   await sleep(DELAY_MS);
   return entry;
 }
@@ -245,6 +262,12 @@ async function main() {
   if (!fs.existsSync(DATA)) {
     console.error(`데이터 파일이 없습니다: ${DATA}\n eval/dataset.example.csv 를 복사해 eval/dataset.csv 를 만드세요.`);
     process.exit(1);
+  }
+  if (flag('models')) {
+    const key = process.env.GEMINI_API_KEY?.trim();
+    if (!key) throw new Error('GEMINI_API_KEY 환경변수가 필요합니다.');
+    for (const m of await listModels(key)) console.log(m.id);
+    return;
   }
   const gold = loadDataset(DATA);
   const modes: Mode[] = USE_LLM ? ['rule', 'llm', 'hybrid'] : ['rule'];
@@ -300,6 +323,7 @@ async function main() {
     const exact = ok.filter((r) => scored(r.g).every((f) => correct(r.g, r.pred.llm ?? null, f))).length;
     lines.push(`| llm (응답 성공분만) | ${cells.join(' | ')} | ${pct(exact, ok.length)} |`);
     if (ok.length < rows.length) lines.push('', `⚠️ LLM 응답 실패 ${rows.length - ok.length}건은 위 llm 행에서 오답으로 계산됐습니다. 다시 실행하면 실패한 문장만 다시 요청합니다.`);
+    if (stopReason) lines.push('', `⛔ 중간에 멈춤: ${stopReason}. 한도가 풀린 뒤(하루 한도는 한국 시간 오후 4~5시경 초기화) 같은 명령을 다시 실행하면 이어서 합니다.`);
   }
 
   const types = [...new Set(rows.map((r) => r.g.expr_type))];
