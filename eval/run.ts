@@ -71,8 +71,18 @@ function parseCsv(src: string): string[][] {
   return rows;
 }
 
+/** Excel saves "CSV" as CP949 on Korean Windows and "CSV UTF-8" as UTF-8: accept both. */
+function readText(file: string): string {
+  const buf = fs.readFileSync(file);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('euc-kr').decode(buf);
+  }
+}
+
 function loadDataset(file: string): Gold[] {
-  const [header, ...rows] = parseCsv(fs.readFileSync(file, 'utf8'));
+  const [header, ...rows] = parseCsv(readText(file));
   const col = (name: string) => {
     const i = header.findIndex((h) => h.trim() === name);
     if (i < 0) throw new Error(`${file}: '${name}' 열이 없습니다. 헤더: ${header.join(',')}`);

@@ -1,4 +1,4 @@
-id,ref_date,text,kind,date,end_date,start_time,expr_type,note
+﻿id,ref_date,text,kind,date,end_date,start_time,expr_type,note
 1,2026-10-08,내일 오후 3시 팀 회의,event,2026-10-09,,15:00,상대 날짜,
 2,2026-10-08,모레 저녁 7시 친구 약속,event,2026-10-10,,19:00,상대 날짜,
 3,2026-10-08,오늘 밤 10시 운동,event,2026-10-08,,22:00,상대 날짜,
