@@ -182,9 +182,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function llmParse(g: Gold, cache: Record<string, CacheEntry>): Promise<CacheEntry> {
   const key = `${g.ref_date}|${g.text}`;
-  if (cache[key]) return cache[key];
+  // Only successful answers are reused; failed calls are retried on the next run.
+  if (cache[key]?.draft) return cache[key];
   let entry: CacheEntry = { draft: null, latencyMs: 0 };
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const t0 = performance.now();
     try {
       const draft = await aiParsePlan(g.text, g.ref_date, DEFAULT_CATEGORIES);
@@ -194,13 +195,15 @@ async function llmParse(g: Gold, cache: Record<string, CacheEntry>): Promise<Cac
       const status = (e as { status?: number }).status;
       entry = { draft: null, error: (e as Error).message, latencyMs: Math.round(performance.now() - t0) };
       if (status !== 429 && status !== 503) break;
-      const wait = 15000 * (attempt + 1);
-      process.stdout.write(`  (한도 초과, ${wait / 1000}초 대기)\n`);
+      const wait = 20000 * (attempt + 1);
+      process.stdout.write(`  (${status === 429 ? '한도 초과' : '서버 혼잡'}, ${wait / 1000}초 대기 후 재시도)\n`);
       await sleep(wait);
     }
   }
-  cache[key] = entry;
-  saveCache(cache);
+  if (entry.draft) {
+    cache[key] = entry;
+    saveCache(cache);
+  }
   await sleep(DELAY_MS);
   return entry;
 }
@@ -271,6 +274,17 @@ async function main() {
     const exact = rows.filter((r) => scored(r.g).every((f) => correct(r.g, r.pred[m] ?? null, f))).length;
     lines.push(`| ${m} | ${cells.join(' | ')} | ${pct(exact, rows.length)} |`);
   }
+  if (USE_LLM) {
+    // Accuracy of the LLM where it actually answered (failures say nothing about understanding).
+    const ok = rows.filter((r) => r.pred.llm);
+    const cells = FIELDS.map((f) => {
+      const rs = ok.filter((r) => scored(r.g).includes(f));
+      return `${pct(rs.filter((r) => correct(r.g, r.pred.llm ?? null, f)).length, rs.length)} (n=${rs.length})`;
+    });
+    const exact = ok.filter((r) => scored(r.g).every((f) => correct(r.g, r.pred.llm ?? null, f))).length;
+    lines.push(`| llm (응답 성공분만) | ${cells.join(' | ')} | ${pct(exact, ok.length)} |`);
+    if (ok.length < rows.length) lines.push('', `⚠️ LLM 응답 실패 ${rows.length - ok.length}건은 위 llm 행에서 오답으로 계산됐습니다. 다시 실행하면 실패한 문장만 다시 요청합니다.`);
+  }
 
   const types = [...new Set(rows.map((r) => r.g.expr_type))];
   lines.push('', '## 표현 유형별 날짜 정확도', '', `| 유형 | n | ${modes.join(' | ')} |`, `|---|---|${modes.map(() => '---').join('|')}|`);
@@ -292,7 +306,7 @@ async function main() {
       `| 항목 | 값 |`,
       `|---|---|`,
       `| LLM 응답 시간 평균 / p50 / p95 | ${Math.round(lat.reduce((s, x) => s + x, 0) / (lat.length || 1))} / ${q(0.5)} / ${q(0.95)} ms |`,
-      `| LLM 실패 | ${errors}건 |`,
+      `| LLM 응답 성공률 | ${pct(rows.length - errors, rows.length)} (실패 ${errors}건) |`,
       `| hybrid가 LLM을 부른 비율 | ${pct(llmCalls, rows.length)} (${llmCalls}/${rows.length}) |`,
       `| 규칙 방식 응답 시간 | 1ms 미만 |`,
       '',
