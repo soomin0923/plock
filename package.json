@@ -14,7 +14,9 @@
     "emulators": "npx --yes firebase-tools emulators:start --only auth,firestore",
     "firebase:login": "npx --yes firebase-tools login",
     "deploy": "npm run build && npx --yes firebase-tools deploy --only hosting,firestore:rules",
-    "eval": "tsx eval/run.ts"
+    "eval": "tsx eval/run.ts",
+    "eval:dev": "tsx eval/run.ts --data eval/dataset.csv --strict",
+    "eval:test": "tsx eval/run.ts --data eval/test.csv --strict"
   },
   "dependencies": {
     "firebase": "^12.19.0",
