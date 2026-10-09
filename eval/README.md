@@ -69,6 +69,7 @@ npm run eval -- --data eval/dataset.csv --llm
 - 짧은 명령: `npm run eval:dev` (= `dataset.csv`, `--strict`), `npm run eval:test` (= `holdout.csv`, `--strict --blind`). LLM까지는 `npm run eval:test -- --llm`.
 - `--blind`: 시험용(holdout) 결과의 `summary.md`에는 문장을 넣지 않고, 틀린 문장은 `wrong.md`에만 씁니다. **시험 문장은 파서를 고치는 쪽(사람이든 AI든)에게 보여 주지 마세요.** 보여 주는 순간 시험 점수가 아니게 됩니다.
 - 첫 줄의 `데이터 …`가 원하는 파일인지 확인하세요. PowerShell은 `--`를 지워 버려서 옵션이 npm에 먹히는데, 이제는 그 경우도 읽습니다.
+- **다른 AI로 재기**: `set AI_PROVIDER=groq`(또는 `claude`, `openai`, `openrouter`) 후 그 서비스의 키를 `GROQ_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `OPENROUTER_API_KEY`에 넣습니다. 모델 고정은 `set AI_MODEL=…`, 쓸 수 있는 모델 목록은 `npm run eval -- --models`. 평가에서는 다른 모델·서비스로 넘어가는 대체 기능이 꺼져 있어 결과표 하나는 한 모델의 점수입니다.
 - PowerShell에서는 `$env:GEMINI_API_KEY="AIza..."`로 키를 넣습니다.
 - 모델을 고정하려면 `set GEMINI_MODEL=gemini-…`를 씁니다. 없으면 앱처럼 최신 Flash 모델을 자동으로 고릅니다.
 - 무료 키 한도 때문에 LLM 호출 사이에 4.5초씩 쉽니다(`--delay 4500`). 한도 초과(429)가 자주 나면 `--delay 8000`처럼 늘리세요.

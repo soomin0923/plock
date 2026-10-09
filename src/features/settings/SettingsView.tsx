@@ -7,8 +7,9 @@ import { HIDEABLE_TABS, NAV, PageHeader } from '../../app/Shell';
 import { useMusic } from '../music/MusicProvider';
 import { Button, Card, Field, Segmented, Select, Spinner, TextInput, Toggle, useConfirm } from '../../components/ui';
 import { useToast } from '../../components/Toast';
-import { DEFAULT_COLORS, setDeviceSettings, useDeviceSettings } from '../../lib/deviceSettings';
-import { pickDefaultModel, testGeminiKey, type GeminiModel } from '../../lib/gemini';
+import { DEFAULT_COLORS, aiKeyFor, aiModelFor, setAiKey, setAiModel, setDeviceSettings, useDeviceSettings, type AiProvider } from '../../lib/deviceSettings';
+import { pickDefaultModel, testGeminiKey } from '../../lib/gemini';
+import { AI_PROVIDERS, providerDefaultModel, providerInfo, providerModels, type AiModel } from '../../lib/aiProviders';
 import { requestNotificationPermission, testReminder } from '../../lib/reminders';
 import { THEME_COLORS, THEME_PRESETS } from '../../data/defaults';
 import { convertLegacy, countRecords, findLegacySources, legacyImportedKeys, markLegacyImported, parseBackup, type LegacySource } from '../../data/bundle';
@@ -138,19 +139,44 @@ function AccountSection() {
 function AiSection() {
   const s = useDeviceSettings();
   const toast = useToast();
-  const [key, setKey] = useState(s.geminiKey);
+  const provider = s.aiProvider || 'gemini';
+  const info = providerInfo(provider);
+  const [key, setKey] = useState(aiKeyFor(provider, s));
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [models, setModels] = useState<GeminiModel[]>([]);
+  const [models, setModels] = useState<AiModel[]>([]);
+  const [autoModel, setAutoModel] = useState<string | null>(null);
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const chosenModel = aiModelFor(provider, s);
+  const others = AI_PROVIDERS.filter((p) => p.id !== provider && !!aiKeyFor(p.id, s));
+
+  const switchTo = (p: AiProvider) => {
+    setDeviceSettings({ aiProvider: p });
+    setKey(aiKeyFor(p));
+    setModels([]);
+    setAutoModel(null);
+    setStatus(null);
+  };
 
   const test = async () => {
     setBusy(true);
     setStatus(null);
     try {
-      setDeviceSettings({ geminiKey: key.trim() });
-      const { model, models: available } = await testGeminiKey(key);
-      setModels(available);
+      setAiKey(provider, key);
+      let model: string;
+      if (provider === 'gemini') {
+        const r = await testGeminiKey(key);
+        setModels(r.models);
+        setAutoModel(pickDefaultModel(r.models));
+        model = r.model;
+      } else {
+        const list = await providerModels(provider, key.trim());
+        const auto = await providerDefaultModel(provider, key.trim(), list);
+        setModels(list);
+        setAutoModel(auto);
+        if (chosenModel && !list.some((m) => m.id === chosenModel)) throw new Error(`키는 정상이지만 '${chosenModel}' 모델을 쓸 수 없습니다. 모델을 '자동'으로 바꿔 주세요.`);
+        model = chosenModel || auto;
+      }
       setStatus({ ok: true, msg: `연결 성공! 사용 모델: ${model}` });
     } catch (e) {
       setStatus({ ok: false, msg: (e as Error).message });
@@ -163,18 +189,28 @@ function AiSection() {
     <Section
       id="ai"
       icon={<Bot className="h-5 w-5" />}
-      title="AI 도우미 (Gemini)"
+      title="AI 도우미"
       description={
         <>
-          내 Gemini API 키를 넣으면 “내일 3시 회의”, “점심 9000원” 같은 문장 정리와 영수증 읽기를 AI가 해요. 키는 <b>이 기기에만</b> 저장되고, Plock 서버를 거치지 않고 Google로 바로 전송돼요. 키가 없어도 기본 분석기로 동작해요.
+          내 AI API 키를 넣으면 “내일 3시 회의”, “점심 9000원” 같은 문장 정리와 영수증 읽기를 AI가 해요. 키는 <b>이 기기에만</b> 저장되고, Plock 서버를 거치지 않고 각 AI 회사로 바로 전송돼요. 키가 없어도 기본 분석기로 동작해요.
         </>
       }
     >
       <div className="space-y-3">
-        <Field label="API 키">
+        <Field label="사용할 AI" hint={info.note}>
+          <Select value={provider} onChange={(e) => switchTo(e.target.value as AiProvider)}>
+            {AI_PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+                {aiKeyFor(p.id, s) ? ' · 키 있음' : ''}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={`${info.label} API 키`}>
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <TextInput type={show ? 'text' : 'password'} value={key} onChange={(e) => setKey(e.target.value)} placeholder="AIza…" autoComplete="off" spellCheck={false} className="pr-10 font-mono text-sm" />
+              <TextInput type={show ? 'text' : 'password'} value={key} onChange={(e) => setKey(e.target.value)} placeholder={info.keyPlaceholder} autoComplete="off" spellCheck={false} className="pr-10 font-mono text-sm" />
               <button type="button" onClick={() => setShow((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted" aria-label={show ? '키 숨기기' : '키 보기'}>
                 {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -185,30 +221,37 @@ function AiSection() {
           </div>
         </Field>
         {status && <p className={cx('rounded-xl px-3 py-2 text-[13px]', status.ok ? 'bg-income/10 text-income' : 'bg-expense/10 text-expense')}>{status.msg}</p>}
-        <Field label="모델" hint="자동으로 두면 키로 쓸 수 있는 최신 Flash 모델을 골라요.">
-          <Select value={s.geminiModel} onChange={(e) => setDeviceSettings({ geminiModel: e.target.value })}>
-            <option value="">자동{models.length ? ` (${pickDefaultModel(models)})` : ''}</option>
-            {s.geminiModel && !models.some((m) => m.id === s.geminiModel) && <option value={s.geminiModel}>{s.geminiModel}</option>}
+        <Field label="모델" hint="자동으로 두면 빠르고 가벼운 모델을 골라요. 목록은 저장·테스트 후에 나타나요.">
+          <Select value={chosenModel} onChange={(e) => setAiModel(provider, e.target.value)}>
+            <option value="">자동{autoModel ? ` (${autoModel})` : ''}</option>
+            {chosenModel && !models.some((m) => m.id === chosenModel) && <option value={chosenModel}>{chosenModel}</option>}
             {models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label} ({m.id})
+                {m.label === m.id ? m.id : `${m.label} (${m.id})`}
               </option>
             ))}
           </Select>
         </Field>
+        <p className="text-[13px] text-muted">
+          {others.length
+            ? `${info.label}가 혼잡하거나 한도를 넘으면 키가 있는 다른 AI(${others.map((o) => o.label).join(', ')})가 대신 처리해요.`
+            : '다른 AI의 키도 넣어 두면, 이 AI가 혼잡할 때 대신 처리해요.'}
+        </p>
         <div className="flex flex-wrap items-center gap-3 text-[13px]">
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary">
-            무료 API 키 발급받기 <ExternalLink className="h-3.5 w-3.5" />
+          <a href={info.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary">
+            {info.label} API 키 발급받기 <ExternalLink className="h-3.5 w-3.5" />
           </a>
-          {s.geminiKey && (
+          {aiKeyFor(provider, s) && (
             <button
               className="font-semibold text-muted hover:text-expense"
               onClick={() => {
-                setDeviceSettings({ geminiKey: '', geminiModel: '' });
+                setAiKey(provider, '');
+                setAiModel(provider, '');
                 setKey('');
                 setModels([]);
+                setAutoModel(null);
                 setStatus(null);
-                toast('이 기기에서 API 키를 지웠어요.');
+                toast(`이 기기에서 ${info.label} API 키를 지웠어요.`);
               }}
             >
               키 지우기

@@ -7,7 +7,7 @@ import { useRouter } from '../../app/router';
 import { Button, Card, Checkbox, Field, Sheet, TextArea, TextInput, useConfirm } from '../../components/ui';
 import { PhotoPicker } from '../../components/PhotoPicker';
 import { useToast } from '../../components/Toast';
-import { useDeviceSettings } from '../../lib/deviceSettings';
+import { hasAnyAiKey, useDeviceSettings } from '../../lib/deviceSettings';
 import { localParseLedger, localParsePlan, type PlanDraft } from '../../lib/nlParser';
 import { diffDays, formatKoreanDate, today } from '../../lib/date';
 import { cx, newId, nowIso, won } from '../../lib/util';
@@ -359,7 +359,7 @@ function NoteSheet({ note, onClose, onGoLedger }: { note: Note | null; onClose: 
   const { data, upsert, remove, releaseImages } = useData();
   const toast = useToast();
   const confirm = useConfirm();
-  const { geminiKey } = useDeviceSettings();
+  const aiOn = hasAnyAiKey(useDeviceSettings());
   const [n, setN] = useState<Note | null>(note);
   const [linkText, setLinkText] = useState('');
   const [saved, setSaved] = useState(true);
@@ -404,7 +404,7 @@ function NoteSheet({ note, onClose, onGoLedger }: { note: Note | null; onClose: 
     if (!n) return;
     setBusy(true);
     try {
-      const p = await parsePlanInput(n.text, !!geminiKey.trim(), data.categories, (m) => toast(m, 'error'), 'dump_convert');
+      const p = await parsePlanInput(n.text, aiOn, data.categories, (m) => toast(m, 'error'), 'dump_convert');
       const memo = [n.memo, n.link].filter(Boolean).join('\n') || undefined;
       if (kind === 'event') {
         const date = p.kind === 'event' ? p.startDate : p.dueDate || n.dueDate || today();
@@ -497,7 +497,7 @@ function NoteSheet({ note, onClose, onGoLedger }: { note: Note | null; onClose: 
           </Field>
 
           <div className="border-t border-line pt-4">
-            <p className="mb-2 text-[13px] font-semibold text-muted">정리하기 {geminiKey.trim() ? '· AI가 날짜·시간을 읽어요' : '· 문장 속 날짜·시간을 읽어요'}</p>
+            <p className="mb-2 text-[13px] font-semibold text-muted">정리하기 {aiOn ? '· AI가 날짜·시간을 읽어요' : '· 문장 속 날짜·시간을 읽어요'}</p>
             <div className="grid grid-cols-3 gap-2">
               <Button disabled={busy || !n.text.trim()} onClick={() => convertPlan('task')} icon={<CheckSquare className="h-4 w-4" />}>
                 할 일로

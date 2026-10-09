@@ -3,6 +3,8 @@ import { useSyncExternalStore } from 'react';
 // Settings that belong to this browser/device only (never uploaded):
 // theme color, the user's own Gemini API key, reminder preferences, which tabs to show.
 
+export type AiProvider = 'gemini' | 'claude' | 'openai' | 'groq' | 'openrouter';
+
 export interface DeviceSettings {
   /** Accent color (buttons, highlights). */
   themeColor: string;
@@ -13,6 +15,11 @@ export interface DeviceSettings {
   geminiKey: string;
   /** Empty = pick automatically (newest Flash model available to the key). */
   geminiModel: string;
+  /** Which AI service parses sentences. Keys for the others are kept as backups (used when it is busy). */
+  aiProvider: AiProvider;
+  /** API keys / chosen models for the non-Gemini services (Gemini keeps geminiKey/geminiModel). */
+  aiKeys: Partial<Record<AiProvider, string>>;
+  aiModels: Partial<Record<AiProvider, string>>;
   remindersEnabled: boolean;
   reminderLead: number; // minutes before start
   /** Play a short chime with each reminder (while Plock is open). */
@@ -32,6 +39,9 @@ const defaults: DeviceSettings = {
   textColor: '#2A2622',
   geminiKey: '',
   geminiModel: '',
+  aiProvider: 'gemini',
+  aiKeys: {},
+  aiModels: {},
   remindersEnabled: false,
   reminderLead: 10,
   reminderSound: true,
@@ -59,6 +69,27 @@ export const DEFAULT_COLORS = { themeColor: defaults.themeColor, bgColor: defaul
 
 export function getDeviceSettings(): DeviceSettings {
   return state;
+}
+
+/** API key / chosen model for a service (Gemini's live in their original fields). */
+export function aiKeyFor(p: AiProvider, st: DeviceSettings = state): string {
+  return (p === 'gemini' ? st.geminiKey : st.aiKeys[p] || '').trim();
+}
+export function aiModelFor(p: AiProvider, st: DeviceSettings = state): string {
+  return (p === 'gemini' ? st.geminiModel : st.aiModels[p] || '').trim();
+}
+const AI_PROVIDER_IDS: AiProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter'];
+/** Any AI service has a key on this device (otherwise the built-in rule parser does the work). */
+export function hasAnyAiKey(st: DeviceSettings = state): boolean {
+  return AI_PROVIDER_IDS.some((p) => !!aiKeyFor(p, st));
+}
+export function setAiKey(p: AiProvider, key: string) {
+  if (p === 'gemini') setDeviceSettings({ geminiKey: key.trim() });
+  else setDeviceSettings({ aiKeys: { ...state.aiKeys, [p]: key.trim() } });
+}
+export function setAiModel(p: AiProvider, model: string) {
+  if (p === 'gemini') setDeviceSettings({ geminiModel: model });
+  else setDeviceSettings({ aiModels: { ...state.aiModels, [p]: model } });
 }
 
 export function setDeviceSettings(patch: Partial<DeviceSettings>) {

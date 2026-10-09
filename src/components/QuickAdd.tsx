@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowUp, Sparkles, Wand2 } from 'lucide-react';
 import { Spinner } from './ui';
-import { useDeviceSettings } from '../lib/deviceSettings';
+import { hasAnyAiKey, useDeviceSettings } from '../lib/deviceSettings';
 import { cx } from '../lib/util';
 
 /** Natural-language input. Uses the user's Gemini key when set, otherwise the built-in parser. */
@@ -14,8 +14,7 @@ export function QuickAdd({
   onSubmit: (text: string, useAi: boolean) => Promise<void>;
   className?: string;
 }) {
-  const { geminiKey } = useDeviceSettings();
-  const useAi = !!geminiKey.trim();
+  const useAi = hasAnyAiKey(useDeviceSettings());
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [focused, setFocused] = useState(false);

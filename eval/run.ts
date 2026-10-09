@@ -3,6 +3,8 @@
 //   npm run eval -- --data eval/dataset.csv                 # rule-based only
 //   set GEMINI_API_KEY=...  (PowerShell: $env:GEMINI_API_KEY="...")
 //   npm run eval -- --data eval/dataset.csv --llm           # + LLM and hybrid
+//   set AI_PROVIDER=groq & set GROQ_API_KEY=...             # another service (claude/openai/groq/openrouter)
+//   set AI_MODEL=...                                        # pin a model (default: the app's automatic pick)
 //
 // Each labeled sentence is parsed by:
 //   rule    built-in Korean rule parser (lib/nlParser.ts)       — no cost, no network
@@ -15,7 +17,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { localParsePlan, resolveKoreanDate, type PlanDraft } from '../src/lib/nlParser';
 import { aiParsePlan, lastModelUsed, listModels, GeminiError, setModelFallback } from '../src/lib/gemini';
-import { setDeviceSettings } from '../src/lib/deviceSettings';
+import { setAiKey, setAiModel, setDeviceSettings, type AiProvider } from '../src/lib/deviceSettings';
+import { providerDefaultModel, providerModels } from '../src/lib/aiProviders';
 import { DEFAULT_CATEGORIES } from '../src/data/defaults';
 
 // ------------------------------------------------------------------ args
@@ -37,7 +40,10 @@ const USE_LLM = flag('llm');
 // Held-out set: keep sentence text out of summary.md so the numbers can be shared without leaking the test.
 const BLIND = flag('blind');
 const DELAY_MS = Number(opt('delay', '4500')); // free tier ≈ 15 requests/min
-const MODEL = process.env.GEMINI_MODEL || '';
+const PROVIDER = (process.env.AI_PROVIDER || 'gemini').trim().toLowerCase() as AiProvider;
+const KEY_ENV: Record<AiProvider, string> = { gemini: 'GEMINI_API_KEY', claude: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', groq: 'GROQ_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+const API_KEY = (process.env.AI_API_KEY || process.env[KEY_ENV[PROVIDER]] || '').trim();
+let MODEL = process.env.AI_MODEL || (PROVIDER === 'gemini' ? process.env.GEMINI_MODEL : '') || '';
 
 // ------------------------------------------------------------------ dataset
 
@@ -200,7 +206,8 @@ const CACHE_DIR = 'eval/.cache';
 type CacheEntry = { draft: PlanDraft | null; error?: string; latencyMs: number; model?: string };
 
 function cacheFile() {
-  return path.join(CACHE_DIR, `llm-${(MODEL || 'auto').replace(/[^\w.-]/g, '_')}.json`);
+  const name = PROVIDER === 'gemini' ? MODEL || 'auto' : `${PROVIDER}-${MODEL}`;
+  return path.join(CACHE_DIR, `llm-${name.replace(/[^\w.-]/g, '_')}.json`);
 }
 function loadCache(): Record<string, CacheEntry> {
   try {
@@ -283,24 +290,28 @@ async function main() {
     console.error(`데이터 파일이 없습니다: ${DATA}\n eval/dataset.example.csv 를 복사해 eval/dataset.csv 를 만드세요.`);
     process.exit(1);
   }
+  if (!(PROVIDER in KEY_ENV)) throw new Error(`AI_PROVIDER는 ${Object.keys(KEY_ENV).join(' / ')} 중 하나입니다.`);
   if (flag('models')) {
-    const key = process.env.GEMINI_API_KEY?.trim();
-    if (!key) throw new Error('GEMINI_API_KEY 환경변수가 필요합니다.');
-    for (const m of await listModels(key)) console.log(m.id);
+    if (!API_KEY) throw new Error(`${KEY_ENV[PROVIDER]} 환경변수가 필요합니다.`);
+    const list = PROVIDER === 'gemini' ? await listModels(API_KEY) : await providerModels(PROVIDER, API_KEY);
+    for (const m of list) console.log(m.id);
     return;
   }
   const gold = loadDataset(DATA);
   const modes: Mode[] = USE_LLM ? ['rule', 'llm', 'hybrid'] : ['rule'];
   if (USE_LLM) {
-    const key = process.env.GEMINI_API_KEY?.trim();
-    if (!key) {
-      console.error('--llm 을 쓰려면 GEMINI_API_KEY 환경변수가 필요합니다.');
+    if (!API_KEY) {
+      console.error(`--llm 을 쓰려면 ${KEY_ENV[PROVIDER]} 환경변수가 필요합니다. (AI_PROVIDER=${PROVIDER})`);
       process.exit(1);
     }
-    setDeviceSettings({ geminiKey: key, geminiModel: MODEL });
+    // Resolve "automatic" up front so the cache file and the summary name the real model.
+    if (PROVIDER !== 'gemini' && !MODEL) MODEL = await providerDefaultModel(PROVIDER, API_KEY);
+    setDeviceSettings({ aiProvider: PROVIDER, geminiKey: '', aiKeys: {}, aiModels: {} });
+    setAiKey(PROVIDER, API_KEY);
+    setAiModel(PROVIDER, MODEL);
     setModelFallback(false); // one model per result table
   }
-  console.log(`데이터 ${DATA} · 문장 ${gold.length}개 · 방식 ${modes.join(', ')}${USE_LLM ? ` · 모델 ${MODEL || '자동'}` : ''}`);
+  console.log(`데이터 ${DATA} · 문장 ${gold.length}개 · 방식 ${modes.join(', ')}${USE_LLM ? ` · ${PROVIDER} 모델 ${MODEL || '자동'}` : ''}`);
 
   const cache = USE_LLM ? loadCache() : {};
   const rows: Row[] = [];

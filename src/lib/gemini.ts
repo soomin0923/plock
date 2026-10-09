@@ -1,6 +1,7 @@
 import type { Category, LedgerCategory } from '../types';
 import { WEEKDAYS_KR, nowHm, weekday } from './date';
-import { getDeviceSettings } from './deviceSettings';
+import { AiError, isRetryable, providerDefaultModel, providerGenerate, type AiPart } from './aiProviders';
+import { aiKeyFor, aiModelFor, getDeviceSettings, hasAnyAiKey, type AiProvider } from './deviceSettings';
 import { blobToBase64 } from './image';
 import type { LedgerDraft, PlanDraft } from './nlParser';
 
@@ -11,19 +12,13 @@ import type { LedgerDraft, PlanDraft } from './nlParser';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-export class GeminiError extends Error {
-  constructor(
-    message: string,
-    public status?: number,
-    /** For 429: Google's quota id (e.g. "...PerDay...") and suggested wait, when the response says. */
-    public quota?: { id?: string; retryAfterMs?: number },
-  ) {
-    super(message);
-  }
-}
+// One error type for every AI service (kept under its old name for existing imports).
+export const GeminiError = AiError;
+export type GeminiError = AiError;
 
+/** True when any AI service has a key on this device. */
 export function hasGeminiKey(): boolean {
-  return !!getDeviceSettings().geminiKey.trim();
+  return hasAnyAiKey();
 }
 
 async function call<T>(path: string, init: RequestInit, key: string): Promise<T> {
@@ -92,7 +87,7 @@ export function rankFallbackModels(models: GeminiModel[], exclude: string): stri
   return [...full, ...lite];
 }
 
-/** Turn model fallback off (the offline eval must measure one model, not a mix). */
+/** Turn model/service fallback off (the offline eval must measure one model, not a mix). */
 let fallbackEnabled = true;
 export function setModelFallback(on: boolean) {
   fallbackEnabled = on;
@@ -131,9 +126,9 @@ async function modelFor(key: string, forceRefresh = false): Promise<string> {
   return model;
 }
 
-type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+type Part = AiPart;
 
-async function generateJson<T>(system: string, parts: Part[]): Promise<T> {
+async function geminiText(system: string, parts: Part[]): Promise<string> {
   const key = getDeviceSettings().geminiKey.trim();
   if (!key) throw new GeminiError('Gemini API 키가 설정되지 않았습니다.');
   const body = JSON.stringify({
@@ -172,9 +167,48 @@ async function generateJson<T>(system: string, parts: Part[]): Promise<T> {
       if (!res) throw last;
     } else throw e;
   }
-  const text = res.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+  return res.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+}
+
+/**
+ * Services to try, in order: the chosen one, then (unless fallback is off) every other service
+ * that has a key on this device. Gemini is tried first when nothing else is chosen.
+ */
+function providerOrder(): AiProvider[] {
+  const st = getDeviceSettings();
+  const all: AiProvider[] = ['gemini', 'groq', 'openrouter', 'claude', 'openai'];
+  const chosen = st.aiProvider || 'gemini';
+  const rest = all.filter((p) => p !== chosen && !!aiKeyFor(p, st));
+  return [chosen, ...(fallbackEnabled ? rest : [])];
+}
+
+async function generateJson<T>(system: string, parts: Part[]): Promise<T> {
+  let last: unknown;
+  let text: string | undefined;
+  for (const p of providerOrder()) {
+    const key = aiKeyFor(p);
+    if (!key) {
+      last = last ?? new AiError('AI API 키가 설정되지 않았습니다. 설정 → AI 도우미에서 키를 넣어 주세요.');
+      continue;
+    }
+    try {
+      if (p === 'gemini') text = await geminiText(system, parts);
+      else {
+        const model = aiModelFor(p) || (await providerDefaultModel(p, key));
+        lastUsed = `${p}:${model}`;
+        text = await providerGenerate(p, key, model, system, parts);
+      }
+      break;
+    } catch (e) {
+      last = e;
+      // Busy or out of quota: the next service with a key gets the same request.
+      if (!isRetryable(e)) throw e;
+    }
+  }
+  if (text === undefined) throw last;
   try {
-    return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, '')) as T;
+    const m = text.match(/\{[\s\S]*\}/); // tolerate ```json fences or a sentence around the object
+    return JSON.parse(m ? m[0] : text) as T;
   } catch {
     throw new GeminiError('AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.');
   }

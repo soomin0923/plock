@@ -20,6 +20,7 @@
     "eval:replay": "tsx eval/replay.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
     "firebase": "^12.19.0",
     "lucide-react": "^0.546.0",
     "pretendard": "^1.3.9",

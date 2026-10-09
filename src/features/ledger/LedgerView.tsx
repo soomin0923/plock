@@ -45,7 +45,7 @@ export function LedgerView() {
       setMonth(i.date);
       newEntry(i.date);
     }
-    if (i.type === 'ledger-text') onQuick(i.text, !!getDeviceSettings().geminiKey.trim());
+    if (i.type === 'ledger-text') onQuick(i.text, hasGeminiKey());
   });
 
   const monthEntries = useMemo(() => entriesInMonth(data.ledger, month), [data.ledger, month]);
