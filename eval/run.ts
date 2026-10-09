@@ -21,12 +21,18 @@ import { DEFAULT_CATEGORIES } from '../src/data/defaults';
 // ------------------------------------------------------------------ args
 
 const args = process.argv.slice(2);
-const flag = (name: string) => args.includes(`--${name}`);
+// PowerShell drops the `--` in `npm run eval -- --data x.csv`, so npm swallows the options itself
+// and exposes them as npm_config_* env vars (a value may also arrive as a bare argument). Accept all of those.
+const npmEnv = (name: string) => process.env[`npm_config_${name}`];
+const flag = (name: string) => args.includes(`--${name}`) || npmEnv(name) === 'true';
 const opt = (name: string, fallback: string) => {
   const i = args.indexOf(`--${name}`);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+  if (i >= 0 && args[i + 1]) return args[i + 1];
+  const env = npmEnv(name);
+  return env && env !== 'true' ? env : fallback;
 };
-const DATA = opt('data', 'eval/dataset.csv');
+const bareCsv = args.find((a, i) => /\.csv$/i.test(a) && !args[i - 1]?.startsWith('--'));
+const DATA = opt('data', bareCsv ?? 'eval/dataset.csv');
 const USE_LLM = flag('llm');
 const DELAY_MS = Number(opt('delay', '4500')); // free tier ≈ 15 requests/min
 const MODEL = process.env.GEMINI_MODEL || '';
@@ -291,7 +297,7 @@ async function main() {
     }
     setDeviceSettings({ geminiKey: key, geminiModel: MODEL });
   }
-  console.log(`문장 ${gold.length}개 · 방식 ${modes.join(', ')}${USE_LLM ? ` · 모델 ${MODEL || '자동'}` : ''}`);
+  console.log(`데이터 ${DATA} · 문장 ${gold.length}개 · 방식 ${modes.join(', ')}${USE_LLM ? ` · 모델 ${MODEL || '자동'}` : ''}`);
 
   const cache = USE_LLM ? loadCache() : {};
   const rows: Row[] = [];
