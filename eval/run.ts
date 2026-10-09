@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { localParsePlan, resolveKoreanDate, type PlanDraft } from '../src/lib/nlParser';
-import { aiParsePlan, lastModelUsed, listModels, GeminiError } from '../src/lib/gemini';
+import { aiParsePlan, lastModelUsed, listModels, GeminiError, setModelFallback } from '../src/lib/gemini';
 import { setDeviceSettings } from '../src/lib/deviceSettings';
 import { DEFAULT_CATEGORIES } from '../src/data/defaults';
 
@@ -298,6 +298,7 @@ async function main() {
       process.exit(1);
     }
     setDeviceSettings({ geminiKey: key, geminiModel: MODEL });
+    setModelFallback(false); // one model per result table
   }
   console.log(`데이터 ${DATA} · 문장 ${gold.length}개 · 방식 ${modes.join(', ')}${USE_LLM ? ` · 모델 ${MODEL || '자동'}` : ''}`);
 

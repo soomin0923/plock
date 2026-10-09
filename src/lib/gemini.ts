@@ -55,6 +55,7 @@ async function call<T>(path: string, init: RequestInit, key: string): Promise<T>
     if (res.status === 403) throw new GeminiError('이 API 키로는 Gemini를 사용할 수 없습니다. (권한 없음)', 403);
     if (res.status === 429) throw new GeminiError('Gemini 사용 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.', 429, quota);
     if (res.status === 404) throw new GeminiError('선택한 모델을 찾을 수 없습니다.', 404);
+    if (res.status === 503) throw new GeminiError('Gemini 서버가 혼잡합니다. 잠시 후 다시 시도해 주세요.', 503);
     throw new GeminiError(msg || `Gemini 요청 실패 (${res.status})`, res.status);
   }
   return res.json() as Promise<T>;
@@ -75,6 +76,26 @@ export async function listModels(key = getDeviceSettings().geminiKey): Promise<G
   return (res.models || [])
     .filter((m) => m.supportedGenerationMethods?.includes('generateContent') && /gemini/i.test(m.name))
     .map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName || m.name }));
+}
+
+/**
+ * Backup models for when the first choice is overloaded (503) or out of quota (429; quotas are per
+ * model): other stable flash models newest first, then flash-lite. Never preview/experimental.
+ */
+export function rankFallbackModels(models: GeminiModel[], exclude: string): string[] {
+  const score = (id: string) => parseFloat(id.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] || '0');
+  const ok = models
+    .map((m) => m.id)
+    .filter((id) => id !== exclude && /flash/.test(id) && !/(image|tts|live|audio|thinking|exp|embedding|8b|preview)/.test(id));
+  const full = ok.filter((id) => !/lite/.test(id)).sort((a, b) => score(b) - score(a) || a.length - b.length);
+  const lite = ok.filter((id) => /lite/.test(id)).sort((a, b) => score(b) - score(a) || a.length - b.length);
+  return [...full, ...lite];
+}
+
+/** Turn model fallback off (the offline eval must measure one model, not a mix). */
+let fallbackEnabled = true;
+export function setModelFallback(on: boolean) {
+  fallbackEnabled = on;
 }
 
 /** Newest stable "flash" model: fast and cheap, good enough for parsing short Korean sentences. */
@@ -129,12 +150,27 @@ async function generateJson<T>(system: string, parts: Part[]): Promise<T> {
     );
   };
   let res;
+  const first = await modelFor(key);
   try {
-    res = await run(await modelFor(key));
+    res = await run(first);
   } catch (e) {
+    if (!(e instanceof GeminiError)) throw e;
     // The configured/cached model may have been retired: pick a fresh one once.
-    if (e instanceof GeminiError && e.status === 404) res = await run(await modelFor(key, true));
-    else throw e;
+    if (e.status === 404) res = await run(await modelFor(key, true));
+    else if ((e.status === 503 || e.status === 429) && fallbackEnabled) {
+      // Overloaded or out of quota: try up to two other models before giving up.
+      let last: unknown = e;
+      for (const alt of rankFallbackModels(await listModels(key), first).slice(0, 2)) {
+        try {
+          res = await run(alt);
+          break;
+        } catch (e2) {
+          last = e2;
+          if (!(e2 instanceof GeminiError) || (e2.status !== 503 && e2.status !== 429)) throw e2;
+        }
+      }
+      if (!res) throw last;
+    } else throw e;
   }
   const text = res.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
   try {
