@@ -8,7 +8,9 @@ import { today, nowHm } from './date';
 // Rows are written through the active storage (IndexedDB for guests, Firestore when signed in)
 // via a sink that DataProvider registers. Export with `plock.exportParseLogs()` in the console.
 
-export const APP_VERSION = '2026.10';
+// Bump when parsing behaviour changes, so logs can be split by the parser that produced them.
+// 2026.10.2: rule parser reads casual forms (낼, 담주, 화욜, 주말, ranges, spans).
+export const APP_VERSION = '2026.10.2';
 
 type Sink = (log: ParseLog) => void;
 let sink: Sink | null = null;

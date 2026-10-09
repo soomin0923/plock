@@ -218,7 +218,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         );
       },
       async parseLogCount() {
-        return (await readOnce(repo, 'parseLogs')).length;
+        const logs = await readOnce(repo, 'parseLogs');
+        const by = (k: (l: (typeof logs)[number]) => string) =>
+          logs.reduce<Record<string, number>>((m, l) => ((m[k(l)] = (m[k(l)] || 0) + 1), m), {});
+        console.log(`해석 기록 ${logs.length}건`, { 종류: by((l) => l.task), 결과: by((l) => l.outcome), 방식: by((l) => l.mode), 버전: by((l) => l.appVersion) });
+        return logs.length;
       },
       async exportSql() {
         const d = dataRef.current;

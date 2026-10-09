@@ -23,12 +23,21 @@ if (!file || !fs.existsSync(file)) {
   process.exit(1);
 }
 
-const logs: ParseLog[] = fs
+// --before 2026-10-09T21:00  → only logs made before that local time (e.g. before a deploy)
+const before = (() => {
+  const i = args.indexOf('--before');
+  const v = i >= 0 ? args[i + 1] : process.env.npm_config_before;
+  return v && v !== 'true' ? new Date(v).toISOString() : null;
+})();
+
+const allLogs: ParseLog[] = fs
   .readFileSync(file, 'utf8')
   .replace(/^﻿/, '')
   .split(/\r?\n/)
   .filter((l) => l.trim())
   .map((l) => JSON.parse(l));
+const logs = before ? allLogs.filter((l) => l.createdAt < before) : allLogs;
+const versions = allLogs.reduce<Record<string, number>>((m, l) => ((m[l.appVersion || '?'] = (m[l.appVersion || '?'] || 0) + 1), m), {});
 
 type F = { kind: string | null; date: string | null; start_time: string | null; end_date: string | null };
 const FIELDS = ['kind', 'date', 'start_time', 'end_date'] as const;
@@ -77,6 +86,8 @@ const lines = [
   '# 실제 입력 재생 평가',
   '',
   `- 파일: \`${path.basename(file)}\``,
+  `- 앱 버전별 기록: ${Object.entries(versions).map(([k, v]) => `${k} ${v}건`).join(', ')}${before ? ` · ${before} 이전 것만 사용` : ''}`,
+  '- 2026.10 = 이전 규칙 파서, 2026.10.2 이후 = 개선한 규칙 파서. "그때 앱의 예측"에 두 버전이 섞이면 --before로 나누세요.',
   `- 기간: ${plan.map((l) => l.refDate).sort()[0] ?? '-'} ~ ${plan.map((l) => l.refDate).sort().at(-1) ?? '-'}`,
   `- 일정 파싱 기록 ${plan.length}건: ${Object.entries(byOutcome).map(([k, v]) => `${k} ${v}`).join(', ')}`,
   `- 채점 대상: 저장된 ${saved.length}건 (저장한 최종 값을 정답으로 봄. 취소·되돌리기는 제외)`,
