@@ -1,0 +1,677 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Bell, Bot, Database, Disc3, Download, ExternalLink, Eye, EyeOff, HardDrive, LogOut, Palette, Smartphone, Trash2, Upload, User, History } from 'lucide-react';
+import { useData } from '../../data/DataProvider';
+import { useIntent } from '../../app/router';
+import { useOpenAuth } from '../../app/authSheet';
+import { HIDEABLE_TABS, NAV, PageHeader } from '../../app/Shell';
+import { useMusic } from '../music/MusicProvider';
+import { Button, Card, Field, Segmented, Select, Spinner, TextInput, Toggle, useConfirm } from '../../components/ui';
+import { useToast } from '../../components/Toast';
+import { DEFAULT_COLORS, aiKeyFor, aiModelFor, setAiKey, setAiModel, setDeviceSettings, useDeviceSettings, type AiProvider } from '../../lib/deviceSettings';
+import { pickDefaultModel, testGeminiKey } from '../../lib/gemini';
+import { eventKey, findDuplicates, taskKey } from '../planner/dedupe';
+import { AI_PROVIDERS, providerDefaultModel, providerInfo, providerModels, type AiModel } from '../../lib/aiProviders';
+import { requestNotificationPermission, testReminder } from '../../lib/reminders';
+import { THEME_COLORS, THEME_PRESETS } from '../../data/defaults';
+import { convertLegacy, countRecords, findLegacySources, legacyImportedKeys, markLegacyImported, parseBackup, type LegacySource } from '../../data/bundle';
+import { contrastRatio, cx, downloadBlob, readFileAsText } from '../../lib/util';
+import { today } from '../../lib/date';
+import { authErrorMessage } from '../../lib/auth';
+
+function Section({ id, icon, title, children, description }: { id: string; icon: React.ReactNode; title: string; description?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Card id={`settings-${id}`} className="scroll-mt-20 p-4 sm:p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-primary-soft text-primary">{icon}</span>
+        <div>
+          <h3 className="font-bold tracking-tight">{title}</h3>
+          {description && <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{description}</p>}
+        </div>
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+export function SettingsView() {
+  useIntent((i) => {
+    if (i.type === 'settings-section') setTimeout(() => document.getElementById(`settings-${i.section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  });
+  return (
+    <div>
+      <PageHeader title="설정" />
+      <div className="grid items-start gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+        <div className="space-y-4">
+          <AccountSection />
+          <AiSection />
+          <AppearanceSection />
+          <MusicSection />
+        </div>
+        <div className="space-y-4">
+          <DataSection />
+          <ReminderSection />
+          <InstallSection />
+          <p className="px-1 text-center text-[12px] text-faint">Plock 2.0 · 플래너 · 다이어리 · 가계부</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ account
+
+function AccountSection() {
+  const { user, sync, signOut, deleteAccount } = useData();
+  const openAuth = useOpenAuth();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Section
+      id="account"
+      icon={<User className="h-5 w-5" />}
+      title="계정"
+      description={user ? '기록은 계정(클라우드)과 이 기기에 함께 저장돼요. 오프라인에서도 쓸 수 있고, 연결되면 자동으로 동기화돼요.' : '로그인하지 않으면 이 브라우저에만 저장돼요. 브라우저 데이터를 지우면 기록도 사라지니 로그인하거나 백업을 받아 두세요.'}
+    >
+      {user ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-2xl bg-hover/60 p-3">
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="h-11 w-11 rounded-full" />
+            ) : (
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-lg font-bold text-on-primary">{(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}</span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">{user.displayName || '내 계정'}</p>
+              <p className="truncate text-[13px] text-muted">{user.email}</p>
+            </div>
+            <span className={cx('rounded-full px-2.5 py-1 text-[12px] font-semibold', sync.state === 'error' ? 'bg-expense/10 text-expense' : 'bg-income/10 text-income')}>
+              {sync.state === 'synced' ? '동기화됨' : sync.state === 'pending' ? '저장 중' : sync.state === 'offline' ? '오프라인' : sync.state === 'error' ? '오류' : ''}
+            </span>
+          </div>
+          {sync.state === 'error' && sync.detail && <p className="rounded-xl bg-expense/10 px-3 py-2 text-[13px] text-expense">{sync.detail}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              icon={<LogOut className="h-4 w-4" />}
+              disabled={busy}
+              onClick={async () => {
+                if (sync.state === 'pending' || sync.state === 'offline') {
+                  const ok = await confirm({ title: '아직 업로드되지 않은 기록이 있어요', message: '지금 로그아웃하면 이 기기에서 업로드 중인 변경사항이 사라질 수 있어요. 온라인 상태에서 잠시 기다린 뒤 로그아웃하는 걸 권장해요.', confirmLabel: '그래도 로그아웃', danger: true });
+                  if (!ok) return;
+                }
+                setBusy(true);
+                await signOut();
+                setBusy(false);
+              }}
+            >
+              로그아웃
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-expense"
+              disabled={busy}
+              onClick={async () => {
+                const ok = await confirm({ title: '계정을 삭제할까요?', message: '계정과 모든 일정·일기·가계부·사진이 영구 삭제되며 되돌릴 수 없어요. 먼저 백업을 받아 두세요.', confirmLabel: '영구 삭제', danger: true });
+                if (!ok) return;
+                setBusy(true);
+                try {
+                  await deleteAccount();
+                } catch (e) {
+                  toast(authErrorMessage(e), 'error');
+                  setBusy(false);
+                }
+              }}
+            >
+              계정 삭제
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="primary" size="lg" className="w-full" onClick={openAuth}>
+          로그인 / 회원가입
+        </Button>
+      )}
+    </Section>
+  );
+}
+
+// ------------------------------------------------------------------ AI
+
+function AiSection() {
+  const s = useDeviceSettings();
+  const toast = useToast();
+  const provider = s.aiProvider || 'gemini';
+  const info = providerInfo(provider);
+  const [key, setKey] = useState(aiKeyFor(provider, s));
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [models, setModels] = useState<AiModel[]>([]);
+  const [autoModel, setAutoModel] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const chosenModel = aiModelFor(provider, s);
+  const others = AI_PROVIDERS.filter((p) => p.id !== provider && !!aiKeyFor(p.id, s));
+
+  const switchTo = (p: AiProvider) => {
+    setDeviceSettings({ aiProvider: p });
+    setKey(aiKeyFor(p));
+    setModels([]);
+    setAutoModel(null);
+    setStatus(null);
+  };
+
+  const test = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      setAiKey(provider, key);
+      let model: string;
+      if (provider === 'gemini') {
+        const r = await testGeminiKey(key);
+        setModels(r.models);
+        setAutoModel(pickDefaultModel(r.models));
+        model = r.model;
+      } else {
+        const list = await providerModels(provider, key.trim());
+        const auto = await providerDefaultModel(provider, key.trim(), list);
+        setModels(list);
+        setAutoModel(auto);
+        if (chosenModel && !list.some((m) => m.id === chosenModel)) throw new Error(`키는 정상이지만 '${chosenModel}' 모델을 쓸 수 없습니다. 모델을 '자동'으로 바꿔 주세요.`);
+        model = chosenModel || auto;
+      }
+      setStatus({ ok: true, msg: `연결 성공! 사용 모델: ${model}` });
+    } catch (e) {
+      setStatus({ ok: false, msg: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section
+      id="ai"
+      icon={<Bot className="h-5 w-5" />}
+      title="AI 도우미"
+      description={
+        <>
+          내 AI API 키를 넣으면 “내일 3시 회의”, “점심 9000원” 같은 문장 정리와 영수증 읽기를 AI가 해요. 키는 <b>이 기기에만</b> 저장되고, Plock 서버를 거치지 않고 각 AI 회사로 바로 전송돼요. 키가 없어도 기본 분석기로 동작해요.
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="사용할 AI" hint={info.note}>
+          <Select value={provider} onChange={(e) => switchTo(e.target.value as AiProvider)}>
+            {AI_PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+                {aiKeyFor(p.id, s) ? ' · 키 있음' : ''}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={`${info.label} API 키`}>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <TextInput type={show ? 'text' : 'password'} value={key} onChange={(e) => setKey(e.target.value)} placeholder={info.keyPlaceholder} autoComplete="off" spellCheck={false} className="pr-10 font-mono text-sm" />
+              <button type="button" onClick={() => setShow((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted" aria-label={show ? '키 숨기기' : '키 보기'}>
+                {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <Button variant="primary" onClick={test} disabled={!key.trim() || busy}>
+              {busy ? <Spinner /> : '저장·테스트'}
+            </Button>
+          </div>
+        </Field>
+        {status && <p className={cx('rounded-xl px-3 py-2 text-[13px]', status.ok ? 'bg-income/10 text-income' : 'bg-expense/10 text-expense')}>{status.msg}</p>}
+        <Field label="모델" hint="자동으로 두면 빠르고 가벼운 모델을 골라요. 목록은 저장·테스트 후에 나타나요.">
+          <Select value={chosenModel} onChange={(e) => setAiModel(provider, e.target.value)}>
+            <option value="">자동{autoModel ? ` (${autoModel})` : ''}</option>
+            {chosenModel && !models.some((m) => m.id === chosenModel) && <option value={chosenModel}>{chosenModel}</option>}
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label === m.id ? m.id : `${m.label} (${m.id})`}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <p className="text-[13px] text-muted">
+          {others.length
+            ? `${info.label}가 혼잡하거나 한도를 넘으면 키가 있는 다른 AI(${others.map((o) => o.label).join(', ')})가 대신 처리해요.`
+            : '다른 AI의 키도 넣어 두면, 이 AI가 혼잡할 때 대신 처리해요.'}
+        </p>
+        <div className="flex flex-wrap items-center gap-3 text-[13px]">
+          <a href={info.keyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary">
+            {info.label} API 키 발급받기 <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          {aiKeyFor(provider, s) && (
+            <button
+              className="font-semibold text-muted hover:text-expense"
+              onClick={() => {
+                setAiKey(provider, '');
+                setAiModel(provider, '');
+                setKey('');
+                setModels([]);
+                setAutoModel(null);
+                setStatus(null);
+                toast(`이 기기에서 ${info.label} API 키를 지웠어요.`);
+              }}
+            >
+              키 지우기
+            </button>
+          )}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// ------------------------------------------------------------------ appearance
+
+function AppearanceSection() {
+  const st = useDeviceSettings();
+  const { prefs, savePrefs } = useData();
+  const isPreset = (p: (typeof THEME_PRESETS)[number]) =>
+    (['themeColor', 'bgColor', 'cardColor', 'textColor'] as const).every((k) => p[k].toLowerCase() === st[k].toLowerCase());
+  const lowText = contrastRatio(st.textColor, st.cardColor) < 4.5 || contrastRatio(st.textColor, st.bgColor) < 4.5;
+  return (
+    <Section id="look" icon={<Palette className="h-5 w-5" />} title="화면">
+      <Field label="테마">
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-4">
+          {THEME_PRESETS.map((p) => {
+            const on = isPreset(p);
+            return (
+              <button
+                key={p.name}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setDeviceSettings({ themeColor: p.themeColor, bgColor: p.bgColor, cardColor: p.cardColor, textColor: p.textColor })}
+                className={cx('flex flex-col items-center gap-1 rounded-xl p-1 text-[12px] font-medium text-ink-soft transition', on && 'ring-2 ring-ink')}
+              >
+                <span className="flex h-12 w-full items-center justify-center gap-1 rounded-lg border border-line" style={{ background: p.bgColor }}>
+                  <span className="flex h-7 w-9 items-center justify-center rounded-md text-[11px] font-bold shadow-sm" style={{ background: p.cardColor, color: p.textColor }}>
+                    가
+                  </span>
+                  <span className="h-4 w-4 rounded-full" style={{ background: p.themeColor }} />
+                </span>
+                {p.name}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      <div className="mt-4 space-y-2.5">
+        <p className="text-[15px] font-medium">색 직접 고르기</p>
+        <ColorSetting label="배경" value={st.bgColor} onChange={(bgColor) => setDeviceSettings({ bgColor })} />
+        <ColorSetting label="카드·창" value={st.cardColor} onChange={(cardColor) => setDeviceSettings({ cardColor })} />
+        <ColorSetting label="글자" value={st.textColor} onChange={(textColor) => setDeviceSettings({ textColor })} />
+        <ColorSetting label="포인트(버튼)" value={st.themeColor} onChange={(themeColor) => setDeviceSettings({ themeColor })} quick={THEME_COLORS.map((t) => t.color)} />
+        {lowText && <p className="rounded-xl bg-amber-50 px-3 py-2 text-[13px] text-amber-800">글자색과 배경색이 너무 비슷해서 잘 안 보일 수 있어요.</p>}
+        <div className="flex justify-end">
+          <Button size="sm" variant="ghost" onClick={() => setDeviceSettings({ ...DEFAULT_COLORS })}>
+            기본 색으로
+          </Button>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <span className="text-[15px] font-medium">한 주의 시작</span>
+        <Segmented<'0' | '1'>
+          size="sm"
+          value={String(prefs.weekStartsOn) as '0' | '1'}
+          onChange={(v) => savePrefs({ weekStartsOn: v === '1' ? 1 : 0 })}
+          options={[
+            { value: '0', label: '일요일' },
+            { value: '1', label: '월요일' },
+          ]}
+        />
+      </div>
+      <TabVisibility />
+    </Section>
+  );
+}
+
+function TabVisibility() {
+  const { hiddenTabs } = useDeviceSettings();
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <p className="text-[15px] font-medium">탭 보이기</p>
+      <p className="mb-2 text-[13px] text-muted">안 쓰는 탭은 꺼 두세요. 기록은 지워지지 않고, 이 기기에만 적용돼요.</p>
+      <div className="divide-y divide-line">
+        {NAV.filter((n) => HIDEABLE_TABS.includes(n.id)).map((n) => (
+          <div key={n.id} className="py-1">
+            <Toggle
+              checked={!hiddenTabs.includes(n.id)}
+              onChange={(on) => setDeviceSettings({ hiddenTabs: on ? hiddenTabs.filter((t) => t !== n.id) : [...hiddenTabs, n.id] })}
+              label={
+                <span className="flex items-center gap-2">
+                  <n.icon className="h-4 w-4 text-primary" />
+                  {n.label}
+                </span>
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MusicSection() {
+  const m = useMusic();
+  return (
+    <Section id="music" icon={<Disc3 className="h-5 w-5" />} title="LP 플레이어" description="YouTube · YouTube Music 링크로 공부할 때 들을 음악을 올려 두세요. PC는 왼쪽 아래, 휴대폰은 오른쪽 아래 LP를 누르면 돼요.">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[15px]">{m.tracks.length ? `올린 판 ${m.tracks.length}개` : '아직 올린 판이 없어요'}</span>
+        <Button onClick={m.openSheet}>{m.tracks.length ? '판 바꾸기' : '판 올리기'}</Button>
+      </div>
+    </Section>
+  );
+}
+
+function ColorSetting({ label, value, onChange, quick }: { label: string; value: string; onChange: (v: string) => void; quick?: string[] }) {
+  const [text, setText] = useState(value);
+  const [prev, setPrev] = useState(value);
+  if (prev !== value) {
+    setPrev(value);
+    setText(value);
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-24 flex-none text-[14px] text-ink-soft">{label}</span>
+      <label className="relative h-8 w-11 flex-none cursor-pointer overflow-hidden rounded-lg border border-line-strong" style={{ background: value }} title={`${label} 색 고르기`}>
+        <input type="color" value={/^#[0-9a-f]{6}$/i.test(value) ? value : '#888888'} onChange={(e) => onChange(e.target.value.toUpperCase())} aria-label={`${label} 색`} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+      </label>
+      <input
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const v = e.target.value.trim();
+          if (/^#?[0-9a-f]{6}$/i.test(v)) onChange((v.startsWith('#') ? v : `#${v}`).toUpperCase());
+        }}
+        aria-label={`${label} 색 코드`}
+        className="w-24 rounded-lg border border-line-strong bg-card px-2 py-1 font-mono text-[13px] uppercase focus:border-primary focus:outline-none"
+      />
+      {quick && (
+        <div className="flex flex-wrap gap-1.5">
+          {quick.map((c) => (
+            <button key={c} type="button" onClick={() => onChange(c)} aria-label={c} className={cx('h-6 w-6 rounded-full', c.toLowerCase() === value.toLowerCase() && 'ring-2 ring-ink ring-offset-1')} style={{ background: c }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ reminders
+
+function ReminderSection() {
+  const s = useDeviceSettings();
+  const toast = useToast();
+  const supported = typeof window !== 'undefined' && 'Notification' in window;
+  const [perm, setPerm] = useState<string>(supported ? Notification.permission : 'unsupported');
+  return (
+    <Section id="reminders" icon={<Bell className="h-5 w-5" />} title="알림" description="시간이 정해진 일정·할 일을 미리 알려 드려요. Plock이 열려 있을 때(설치한 앱 포함) 동작해요.">
+      {!supported ? (
+        <p className="text-sm text-muted">이 브라우저는 알림을 지원하지 않아요.</p>
+      ) : (
+        <div className="space-y-3">
+          <Toggle
+            checked={s.remindersEnabled && perm === 'granted'}
+            onChange={async (on) => {
+              if (on) {
+                const p = await requestNotificationPermission();
+                setPerm(p);
+                if (p !== 'granted') return toast('브라우저 설정에서 알림을 허용해 주세요.', 'info');
+              }
+              setDeviceSettings({ remindersEnabled: on });
+            }}
+            label="일정 알림"
+            description={perm === 'denied' ? '알림이 차단되어 있어요. 브라우저 사이트 설정에서 허용해 주세요.' : undefined}
+          />
+          {s.remindersEnabled && perm === 'granted' && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[15px]">미리 알림</span>
+              <Select value={String(s.reminderLead)} onChange={(e) => setDeviceSettings({ reminderLead: Number(e.target.value) })} className="w-32">
+                {[0, 5, 10, 15, 30, 60].map((m) => (
+                  <option key={m} value={m}>
+                    {m === 0 ? '정각' : `${m}분 전`}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          {s.remindersEnabled && perm === 'granted' && (
+            <>
+              <Toggle checked={s.reminderSound} onChange={(on) => setDeviceSettings({ reminderSound: on })} label="알림 소리" description="알림과 함께 짧은 소리를 내요." />
+              <Button className="w-full" onClick={() => testReminder(s.reminderSound)}>
+                알림 테스트
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ------------------------------------------------------------------ install (PWA)
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: string }>;
+}
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e as BeforeInstallPromptEvent;
+  });
+}
+
+function InstallSection() {
+  const [, force] = useState(0);
+  const standalone = typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (standalone) return null;
+  return (
+    <Section id="install" icon={<Smartphone className="h-5 w-5" />} title="앱으로 설치" description="홈 화면에 추가하면 앱처럼 전체 화면으로 열리고, 오프라인에서도 열려요.">
+      {deferredPrompt ? (
+        <Button
+          variant="primary"
+          onClick={async () => {
+            await deferredPrompt?.prompt();
+            deferredPrompt = null;
+            force((n) => n + 1);
+          }}
+        >
+          설치하기
+        </Button>
+      ) : ios ? (
+        <p className="text-sm text-ink-soft">Safari 하단의 공유 버튼 → <b>홈 화면에 추가</b>를 눌러 주세요.</p>
+      ) : (
+        <p className="text-sm text-ink-soft">Chrome·Edge 주소창 오른쪽의 설치 아이콘, 또는 메뉴 → <b>앱 설치 / 홈 화면에 추가</b>를 눌러 주세요.</p>
+      )}
+    </Section>
+  );
+}
+
+// ------------------------------------------------------------------ data
+
+function DataSection() {
+  const { data, user, repoKind, exportBackup, importBundle, deleteAllData, cleanupImages, storageBytes, remove } = useData();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [bytes, setBytes] = useState<number | null>(null);
+  const [legacy, setLegacy] = useState<LegacySource[]>([]);
+  const [legacyDone, setLegacyDone] = useState<string[]>(legacyImportedKeys());
+
+  useEffect(() => {
+    storageBytes().then(setBytes);
+    setLegacy(findLegacySources());
+  }, [storageBytes, data.diaries.length, data.stickers.length]);
+
+  const counts = [
+    ['일정', data.events.length],
+    ['할 일', data.tasks.length],
+    ['습관', data.habits.length],
+    ['일기', data.diaries.length],
+    ['가계부', data.ledger.length],
+    ['스티커', data.stickers.length],
+  ] as const;
+
+  const run = async (label: string, fn: () => Promise<void>) => {
+    setBusy(label);
+    try {
+      await fn();
+    } catch (e) {
+      toast((e as Error).message || '실패했어요.', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doExport = () =>
+    run('백업 파일 만드는 중…', async () => {
+      const blob = await exportBackup((d, t) => setBusy(`사진 모으는 중 ${d}/${t}`));
+      downloadBlob(blob, `plock_backup_${today()}.json`);
+      toast('백업 파일을 내려받았어요.');
+    });
+
+  const doImport = (file?: File) =>
+    file &&
+    run('백업 읽는 중…', async () => {
+      const bundle = await parseBackup(JSON.parse(await readFileAsText(file)), (m) => setBusy(m));
+      const n = countRecords(bundle.records);
+      const ok = await confirm({ title: `${n}개 기록을 가져올까요?`, message: '같은 기록이 이미 있으면 백업 내용으로 덮어쓰고, 나머지는 그대로 둬요.', confirmLabel: '가져오기' });
+      if (!ok) return;
+      await importBundle(bundle, (m) => setBusy(m));
+      toast(`${n}개 기록을 가져왔어요.`);
+    });
+
+  const doLegacy = (src: LegacySource) =>
+    run('이전 데이터 변환 중…', async () => {
+      const bundle = await convertLegacy(src.data, (m) => setBusy(m));
+      const n = await importBundle(bundle, (m) => setBusy(m));
+      markLegacyImported(src.key);
+      setLegacyDone(legacyImportedKeys());
+      toast(`이전 버전 기록 ${n}개를 가져왔어요.`);
+    });
+
+  return (
+    <Section
+      id="data"
+      icon={<Database className="h-5 w-5" />}
+      title="데이터"
+      description={repoKind === 'cloud' ? `${user?.email} 계정에 저장 중` : '이 브라우저(IndexedDB)에 저장 중'}
+    >
+      <div className="mb-4 grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
+        {counts.map(([label, n]) => (
+          <div key={label} className="rounded-xl bg-hover/60 px-1 py-2">
+            <p className="text-lg font-bold tabular">{n}</p>
+            <p className="text-[11px] text-muted">{label}</p>
+          </div>
+        ))}
+      </div>
+      {bytes !== null && (
+        <p className="mb-4 flex items-center gap-1.5 text-[13px] text-muted">
+          <HardDrive className="h-3.5 w-3.5" /> {repoKind === 'cloud' ? '사진·스티커 용량' : '사용 중인 저장 공간'} {(bytes / 1024 / 1024).toFixed(1)}MB
+        </p>
+      )}
+
+      {busy && (
+        <p className="mb-3 flex items-center gap-2 rounded-xl bg-hover px-3 py-2 text-sm text-ink-soft">
+          <Spinner /> {busy}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button disabled={!!busy} icon={<Download className="h-4 w-4" />} onClick={doExport}>
+          백업 받기
+        </Button>
+        <Button disabled={!!busy} icon={<Upload className="h-4 w-4" />} onClick={() => fileRef.current?.click()}>
+          백업 불러오기
+        </Button>
+      </div>
+      <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => (doImport(e.target.files?.[0]), (e.target.value = ''))} />
+      <p className="mt-2 text-[12px] text-muted">백업 파일(.json)에는 사진까지 모두 들어 있어요. 이전 버전 Plock에서 받은 백업도 불러올 수 있어요.</p>
+
+      {legacy.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+            <History className="h-4 w-4 text-amber-600" /> 이 브라우저에 이전 버전 기록이 남아 있어요
+          </p>
+          <div className="space-y-1.5">
+            {legacy.map((src) => (
+              <div key={src.key} className="flex items-center gap-2 text-sm">
+                <span className="min-w-0 flex-1 truncate">
+                  {src.label} · {src.total}개
+                </span>
+                {legacyDone.includes(src.key) ? (
+                  <span className="text-[13px] text-muted">가져옴</span>
+                ) : (
+                  <Button size="sm" variant="primary" disabled={!!busy} onClick={() => doLegacy(src)}>
+                    가져오기
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-line pt-3 text-[13px]">
+        <button
+          disabled={!!busy}
+          className="font-semibold text-muted hover:text-ink"
+          onClick={async () => {
+            const ev = findDuplicates(data.events, eventKey);
+            const tk = findDuplicates(data.tasks, taskKey);
+            const nEv = ev.reduce((n, g) => n + g.drop.length, 0);
+            const nTk = tk.reduce((n, g) => n + g.drop.length, 0);
+            if (!nEv && !nTk) return toast('중복된 일정·할 일이 없어요.');
+            const sample = ev.slice(0, 3).map((g) => `· ${g.keep.startDate} ${g.keep.startTime || ''} ${g.keep.title} ×${g.drop.length + 1}`).join('\n');
+            const ok = await confirm({
+              title: `중복 ${nEv + nTk}건을 정리할까요?`,
+              message: `제목·날짜·시작 시각이 같은 일정 ${nEv}건, 할 일 ${nTk}건이에요. 묶음마다 내용이 가장 많은 것 하나만 남기고 지워요. 되돌릴 수 없으니 먼저 백업을 받아 두세요.\n${sample}`,
+              confirmLabel: '정리',
+              danger: true,
+            });
+            if (!ok) return;
+            remove('events', ev.flatMap((g) => g.drop.map((x) => x.id)));
+            remove('tasks', tk.flatMap((g) => g.drop.map((x) => x.id)));
+            toast(`중복 일정 ${nEv}건, 할 일 ${nTk}건을 정리했어요.`);
+          }}
+        >
+          중복 일정 정리
+        </button>
+        <button
+          disabled={!!busy}
+          className="font-semibold text-muted hover:text-ink"
+          onClick={() =>
+            run('정리 중…', async () => {
+              const n = await cleanupImages();
+              setBytes(await storageBytes());
+              toast(n ? `쓰지 않는 이미지 ${n}개를 정리했어요.` : '정리할 이미지가 없어요.');
+            })
+          }
+        >
+          안 쓰는 이미지 정리
+        </button>
+        <button
+          disabled={!!busy}
+          className="inline-flex items-center gap-1 font-semibold text-expense"
+          onClick={async () => {
+            const ok = await confirm({ title: '모든 기록을 삭제할까요?', message: `${repoKind === 'cloud' ? '계정에 저장된' : '이 브라우저에 저장된'} 일정·할 일·습관·일기·가계부·스티커가 모두 삭제돼요. 되돌릴 수 없어요.`, confirmLabel: '모두 삭제', danger: true });
+            if (ok) run('삭제 중…', async () => {
+              await deleteAllData();
+              toast('모든 기록을 삭제했어요.');
+            });
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> 모든 기록 삭제
+        </button>
+      </div>
+    </Section>
+  );
+}

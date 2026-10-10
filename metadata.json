@@ -1,8 +1,6 @@
 {
-  "name": "Remix 플랜\u0026로그 - Planner \u0026 Diary",
-  "description": "월별/일별 플래너, 루틴 및 체크리스트, 감정 일기, 가계부, 갤러리 이미지 커스텀 스티커 꾸미기, 클라우드 및 구글 캘린더 동기화를 제공하는 플래너 다이어리",
+  "name": "Plock - Planner, Diary & Ledger",
+  "description": "플래너(일정·할 일·습관), 사진·스티커 다이어리, 가계부를 한곳에서. Firebase 계정 동기화 + 브라우저 오프라인 저장, 사용자별 Gemini API 키.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": []
 }

@@ -1,22 +1,30 @@
 rules_version = '2';
+
+// Plock security rules
+// - Every signed-in user can read and write ONLY their own data under accounts/{their uid}.
+// - Everything else (including the old users / userData / systemBackups collections that
+//   stored plaintext passwords) is closed to all clients.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow read/write for all application collections in this private studio environment
-    match /users/{userId} {
-      allow read, write: if true;
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
     }
 
-    match /userData/{userId} {
-      allow read, write: if true;
+    function knownCollection(col) {
+      return col in ['categories', 'events', 'tasks', 'habits', 'diaries', 'stickers',
+                     'ledger', 'ledgerCategories', 'notes', 'prefs', 'parseLogs', 'assets', 'assetIndex'];
     }
 
-    match /systemBackups/{backupId} {
-      allow read, write: if true;
+    match /accounts/{uid}/{col}/{docId} {
+      allow read, delete: if isOwner(uid) && knownCollection(col);
+      // Records must carry their own id; images are stored one per document (< 1 MiB).
+      allow create, update: if isOwner(uid) && knownCollection(col)
+        && (col in ['assets', 'assetIndex'] || request.resource.data.id == docId);
     }
 
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
