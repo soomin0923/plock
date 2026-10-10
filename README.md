@@ -154,7 +154,7 @@ Claude Desktop · Claude Code가 내 Plock 일정을 **조회(`list_events`)·�
 - 조직 정책으로 서비스 계정 키를 만들 수 없어 **키 파일 없이** Google 로그인(Application Default Credentials)으로 인증.
   관리자 권한이므로 한 계정(`PLOCK_UID`)에 고정하고 두 가지 동작만 노출
 - 테스트: Firestore 에뮬레이터에 실제 MCP 클라이언트로 서버를 띄워 두 도구를 호출(`npm run mcp:test`),
-  실제 데이터 읽기 확인(`npm run mcp:check`)
+  실제 데이터 읽기 확인(`npm run mcp:check`), Claude Desktop에서 실데이터 조회·등록·중복 방지까지 확인
 
 ## 구조
 
