@@ -376,7 +376,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       <Sheet open={!!state} onClose={() => close(false)} size="sm" title={state?.title}>
-        {state?.message && <div className="text-[15px] leading-relaxed text-ink-soft">{state.message}</div>}
+        {state?.message && <div className="whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">{state.message}</div>}
         <div className="mt-5 flex gap-2">
           <Button className="flex-1" onClick={() => close(false)}>
             취소

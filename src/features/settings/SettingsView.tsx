@@ -9,6 +9,7 @@ import { Button, Card, Field, Segmented, Select, Spinner, TextInput, Toggle, use
 import { useToast } from '../../components/Toast';
 import { DEFAULT_COLORS, aiKeyFor, aiModelFor, setAiKey, setAiModel, setDeviceSettings, useDeviceSettings, type AiProvider } from '../../lib/deviceSettings';
 import { pickDefaultModel, testGeminiKey } from '../../lib/gemini';
+import { eventKey, findDuplicates, taskKey } from '../planner/dedupe';
 import { AI_PROVIDERS, providerDefaultModel, providerInfo, providerModels, type AiModel } from '../../lib/aiProviders';
 import { requestNotificationPermission, testReminder } from '../../lib/reminders';
 import { THEME_COLORS, THEME_PRESETS } from '../../data/defaults';
@@ -496,7 +497,7 @@ function InstallSection() {
 // ------------------------------------------------------------------ data
 
 function DataSection() {
-  const { data, user, repoKind, exportBackup, importBundle, deleteAllData, cleanupImages, storageBytes } = useData();
+  const { data, user, repoKind, exportBackup, importBundle, deleteAllData, cleanupImages, storageBytes, remove } = useData();
   const toast = useToast();
   const confirm = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -620,6 +621,30 @@ function DataSection() {
       )}
 
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-line pt-3 text-[13px]">
+        <button
+          disabled={!!busy}
+          className="font-semibold text-muted hover:text-ink"
+          onClick={async () => {
+            const ev = findDuplicates(data.events, eventKey);
+            const tk = findDuplicates(data.tasks, taskKey);
+            const nEv = ev.reduce((n, g) => n + g.drop.length, 0);
+            const nTk = tk.reduce((n, g) => n + g.drop.length, 0);
+            if (!nEv && !nTk) return toast('중복된 일정·할 일이 없어요.');
+            const sample = ev.slice(0, 3).map((g) => `· ${g.keep.startDate} ${g.keep.startTime || ''} ${g.keep.title} ×${g.drop.length + 1}`).join('\n');
+            const ok = await confirm({
+              title: `중복 ${nEv + nTk}건을 정리할까요?`,
+              message: `제목·날짜·시작 시각이 같은 일정 ${nEv}건, 할 일 ${nTk}건이에요. 묶음마다 내용이 가장 많은 것 하나만 남기고 지워요. 되돌릴 수 없으니 먼저 백업을 받아 두세요.\n${sample}`,
+              confirmLabel: '정리',
+              danger: true,
+            });
+            if (!ok) return;
+            remove('events', ev.flatMap((g) => g.drop.map((x) => x.id)));
+            remove('tasks', tk.flatMap((g) => g.drop.map((x) => x.id)));
+            toast(`중복 일정 ${nEv}건, 할 일 ${nTk}건을 정리했어요.`);
+          }}
+        >
+          중복 일정 정리
+        </button>
         <button
           disabled={!!busy}
           className="font-semibold text-muted hover:text-ink"

@@ -7,6 +7,7 @@ import config from '../firebase-applet-config.json' with { type: 'json' };
 import type { Category, PlannerEvent } from '../src/types';
 import { newId, nowIso } from '../src/lib/util';
 import { addDays, diffDays } from '../src/lib/date';
+import { eventKey } from '../src/features/planner/dedupe';
 
 export interface StoreOptions {
   uid: string;
@@ -101,7 +102,8 @@ export class PlockStore {
     }
 
     const existing = await this.col('events').where('startDate', '==', input.date).get();
-    const dup = existing.docs.map((d) => d.data() as PlannerEvent).find((e) => e.title === title && (e.startTime || '') === (input.startTime || ''));
+    const key = eventKey({ title, startDate: input.date, startTime: input.startTime });
+    const dup = existing.docs.map((d) => d.data() as PlannerEvent).find((e) => eventKey(e) === key);
     if (dup) return { event: dup, created: false };
 
     const cats = await this.categories();

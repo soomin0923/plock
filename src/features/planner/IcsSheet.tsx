@@ -8,6 +8,7 @@ import { downloadBlob, readFileAsText } from '../../lib/util';
 import { formatKoreanDate, today } from '../../lib/date';
 import { blankEvent, blankTask } from './forms';
 import { sortCategories } from './helpers';
+import { eventKey, taskKey } from './dedupe';
 
 export function IcsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data, upsert } = useData();
@@ -25,11 +26,16 @@ export function IcsSheet({ open, onClose }: { open: boolean; onClose: () => void
     if (!f) return;
     try {
       const parsed = parseIcs(await readFileAsText(f));
-      const existing = new Set(data.events.map((e) => `${e.title}|${e.startDate}|${e.startTime || ''}`));
-      setItems(parsed.map((p) => {
-        const dup = existing.has(`${p.title}|${p.startDate}|${p.startTime || ''}`);
-        return { ...p, dup, pick: !dup };
-      }));
+      // Already in Plock, or repeated inside the same file: unticked, so importing twice adds nothing.
+      const seen = new Set([...data.events.map(eventKey), ...data.tasks.map(taskKey)]);
+      setItems(
+        parsed.map((p) => {
+          const key = p.kind === 'task' ? taskKey({ title: p.title, dueDate: p.startDate, dueTime: p.startTime }) : eventKey(p);
+          const dup = seen.has(key);
+          seen.add(key);
+          return { ...p, dup, pick: !dup };
+        }),
+      );
     } catch (e) {
       toast((e as Error).message, 'error');
     }
@@ -79,7 +85,10 @@ export function IcsSheet({ open, onClose }: { open: boolean; onClose: () => void
       ) : (
         <div>
           <div className="mb-3 flex items-center justify-between text-sm">
-            <span className="text-muted">{items.length}개 발견 · {items.filter((i) => i.pick).length}개 선택</span>
+            <span className="text-muted">
+              {items.length}개 발견 · {items.filter((i) => i.pick).length}개 선택
+              {items.some((i) => i.dup) && ` · 이미 있는 ${items.filter((i) => i.dup).length}개는 제외`}
+            </span>
             <button className="font-semibold text-primary" onClick={() => setItems(items.map((i) => ({ ...i, pick: !items.every((x) => x.pick) })))}>
               {items.every((x) => x.pick) ? '모두 해제' : '모두 선택'}
             </button>
