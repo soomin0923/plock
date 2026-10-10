@@ -19,7 +19,8 @@
     "eval:test": "tsx eval/run.ts --data eval/holdout.csv --strict --blind",
     "eval:replay": "tsx eval/replay.ts",
     "mcp": "tsx mcp/server.ts",
-    "mcp:test": "tsx mcp/e2e.test.ts"
+    "mcp:test": "tsx mcp/e2e.test.ts",
+    "mcp:check": "tsx mcp/check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
