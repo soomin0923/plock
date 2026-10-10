@@ -3,7 +3,8 @@
 import { PlockStore } from './plockStore';
 import { addDays, today } from '../src/lib/date';
 
-const uid = process.env.PLOCK_UID?.trim();
+// Tolerate a UID pasted with the quotes the browser console shows around strings ('abc…').
+const uid = process.env.PLOCK_UID?.trim().replace(/^['"`]+|['"`]+$/g, '').trim();
 if (!uid) {
   console.error('PLOCK_UID 환경 변수가 필요합니다.');
   process.exit(1);
