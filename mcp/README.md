@@ -13,12 +13,22 @@ Claude Desktop, Claude Code 같은 MCP 클라이언트가 **내 Plock 일정을 
 
 ## 1. 준비 (한 번만)
 
-1. **서비스 계정 키**: Firebase 콘솔 → 프로젝트 설정(톱니) → 서비스 계정 → **새 비공개 키 생성** → JSON 저장.
-   - 저장 위치는 **저장소 밖**으로 (예: `D:\plock-secrets\plock-sa.json`). 절대 커밋하거나 공유하지 마세요.
-   - 이 키는 Firestore 보안 규칙을 우회합니다. 그래서 서버는 `PLOCK_UID` 한 계정에만 접근하고, 조회·추가 두 가지만 합니다.
-2. **내 계정 ID(UID)**: 로그인한 Plock에서 F12 → 콘솔 → `plock.uid()`
+키 파일 없이 **내 Google 로그인**으로 인증합니다(Application Default Credentials).
+Firebase 프로젝트가 조직 정책으로 서비스 계정 키 생성을 막아 두었기 때문이고, 키 파일이 아예 없으니 유출될 것도 없습니다.
+
+1. **Google Cloud CLI 설치**: https://cloud.google.com/sdk/docs/install → Windows 설치 프로그램. 설치 후 새 명령 프롬프트를 엽니다.
+2. **로그인** (Plock Firebase 프로젝트 소유자인 Google 계정으로):
+   ```bat
+   gcloud auth application-default login
+   gcloud auth application-default set-quota-project pivotal-reducer-2thv3
+   ```
+   브라우저에서 로그인하면 `%APPDATA%\gcloud\application_default_credentials.json`이 만들어집니다. 이 파일도 공유하지 마세요.
+3. **내 계정 ID(UID)**: 로그인한 Plock에서 F12 → 콘솔 → `plock.uid()`
    (또는 Firebase 콘솔 → Authentication → 사용자 → 사용자 UID)
-3. `cd D:\plock` → `git pull` → `npm install`
+4. `cd D:\plock` → `git pull` → `npm install`
+
+이 인증은 Firestore 보안 규칙을 우회하는 관리자 권한입니다. 그래서 서버는 `PLOCK_UID` 한 계정에만 접근하고, 조회·추가 두 가지만 합니다.
+(서비스 계정 키를 만들 수 있는 환경이라면 `GOOGLE_APPLICATION_CREDENTIALS`에 키 경로를 넣어도 됩니다.)
 
 ## 2. Claude Desktop에 연결 (Windows)
 
@@ -30,10 +40,7 @@ Claude Desktop, Claude Code 같은 MCP 클라이언트가 **내 Plock 일정을 
     "plock": {
       "command": "node",
       "args": ["D:\\plock\\node_modules\\tsx\\dist\\cli.mjs", "D:\\plock\\mcp\\server.ts"],
-      "env": {
-        "GOOGLE_APPLICATION_CREDENTIALS": "D:\\plock-secrets\\plock-sa.json",
-        "PLOCK_UID": "여기에_UID"
-      }
+      "env": { "PLOCK_UID": "여기에_UID" }
     }
   }
 }
@@ -43,8 +50,15 @@ Claude Desktop을 완전히 종료했다가 다시 켜면 도구 목록에 `ploc
 
 **Claude Code**라면:
 ```bat
-claude mcp add plock -e GOOGLE_APPLICATION_CREDENTIALS=D:\plock-secrets\plock-sa.json -e PLOCK_UID=여기에_UID -- node D:\plock\node_modules\tsx\dist\cli.mjs D:\plock\mcp\server.ts
+claude mcp add plock -e PLOCK_UID=여기에_UID -- node D:\plock\node_modules\tsx\dist\cli.mjs D:\plock\mcp\server.ts
 ```
+
+**먼저 명령창에서 서버만 띄워 확인**하려면:
+```bat
+set PLOCK_UID=여기에_UID
+npm run mcp
+```
+`plock MCP server ready`가 나오면 인증 준비 완료입니다 (Ctrl+C로 종료).
 
 ## 3. 써 보기
 

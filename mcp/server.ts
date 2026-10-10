@@ -1,10 +1,15 @@
 // Plock MCP server: lets an MCP client (Claude Desktop, Claude Code, …) read and add planner events.
 //
-//   GOOGLE_APPLICATION_CREDENTIALS=<service-account.json> PLOCK_UID=<Firebase Auth uid> npx tsx mcp/server.ts
+//   gcloud auth application-default login            (once: your Google login, no key file)
+//   PLOCK_UID=<Firebase Auth uid> npx tsx mcp/server.ts
 //
-// Runs on your own PC over stdio. The service-account key bypasses Firestore rules, so the server is
-// pinned to one account (PLOCK_UID) and only exposes two narrow tools. Never commit the key.
+// Runs on your own PC over stdio with Google Application Default Credentials: your own gcloud login
+// (or GOOGLE_APPLICATION_CREDENTIALS if a key file is allowed). Admin access bypasses Firestore rules,
+// so the server is pinned to one account (PLOCK_UID) and only exposes two narrow tools.
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -16,8 +21,12 @@ if (!uid) {
   console.error('PLOCK_UID 환경 변수가 필요합니다 (Firebase 콘솔 → Authentication → 사용자 UID).');
   process.exit(1);
 }
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.FIRESTORE_EMULATOR_HOST) {
-  console.error('GOOGLE_APPLICATION_CREDENTIALS 환경 변수에 서비스 계정 키(JSON) 경로를 넣어 주세요. (mcp/README.md)');
+// Where Application Default Credentials come from, so a missing login fails here with a clear message.
+const adcFile = process.platform === 'win32'
+  ? path.join(process.env.APPDATA || '', 'gcloud', 'application_default_credentials.json')
+  : path.join(os.homedir(), '.config', 'gcloud', 'application_default_credentials.json');
+if (!process.env.FIRESTORE_EMULATOR_HOST && !process.env.GOOGLE_APPLICATION_CREDENTIALS && !fs.existsSync(adcFile)) {
+  console.error('Google 인증 정보가 없습니다. 먼저 `gcloud auth application-default login`을 실행하세요. (mcp/README.md)');
   process.exit(1);
 }
 const store = new PlockStore({ uid });

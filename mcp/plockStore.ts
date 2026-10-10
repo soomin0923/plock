@@ -22,7 +22,8 @@ export class PlockStore {
   private db: Firestore;
 
   constructor(private opts: StoreOptions) {
-    // Credentials: GOOGLE_APPLICATION_CREDENTIALS (service-account JSON) or FIRESTORE_EMULATOR_HOST for tests.
+    // Credentials: Application Default Credentials (gcloud login or GOOGLE_APPLICATION_CREDENTIALS),
+    // or FIRESTORE_EMULATOR_HOST for tests.
     const app: App =
       getApps()[0] ??
       initializeApp({
