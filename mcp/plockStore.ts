@@ -37,6 +37,15 @@ export class PlockStore {
     return this.db.collection('accounts').doc(this.opts.uid).collection(name);
   }
 
+  /** For setup checks: which account ids exist in this database, and record counts for ours. */
+  async diagnose(): Promise<{ accounts: string[]; counts: Record<string, number> }> {
+    const accounts = (await this.db.collection('accounts').listDocuments()).map((d) => d.id);
+    const cols = await this.db.collection('accounts').doc(this.opts.uid).listCollections();
+    const counts: Record<string, number> = {};
+    for (const c of cols) counts[c.id] = (await c.count().get()).data().count;
+    return { accounts, counts };
+  }
+
   async categories(): Promise<Category[]> {
     const snap = await this.col('categories').get();
     return snap.docs.map((d) => d.data() as Category).sort((a, b) => a.order - b.order);
