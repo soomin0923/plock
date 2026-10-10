@@ -213,9 +213,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             'plock.exportSql()        → plock-YYYYMMDD.sql  (MySQL: categories, events, tasks, ledger_categories, ledger, notes, parse_logs)',
             'plock.exportParseLogs()  → parse log as .csv + .jsonl (입력 문장 → 파서 예측 → 실제 저장값)',
             'plock.parseLogCount()    → number of parse-log rows',
+            'plock.uid()              → your account id (for the MCP server, PLOCK_UID)',
             '일기·사진·스티커는 내보내지 않아요.',
           ].join('\n'),
         );
+      },
+      uid() {
+        return user?.uid ?? '(게스트 모드: 로그인해야 MCP 서버로 연결할 수 있어요)';
       },
       async parseLogCount() {
         const logs = await readOnce(repo, 'parseLogs');

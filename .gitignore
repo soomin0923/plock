@@ -23,3 +23,9 @@ eval/results/
 # Held-out sentences for the parser eval: keep local, never commit (the parser must not be tuned on them)
 eval/test.csv
 eval/holdout.csv
+
+# Firebase service-account keys (the MCP server's credentials) — never commit
+*service-account*.json
+*-sa.json
+plock-sa*.json
+*firebase-adminsdk*.json
