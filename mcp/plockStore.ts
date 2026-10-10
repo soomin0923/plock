@@ -6,7 +6,7 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import config from '../firebase-applet-config.json' with { type: 'json' };
 import type { Category, PlannerEvent } from '../src/types';
 import { newId, nowIso } from '../src/lib/util';
-import { diffDays } from '../src/lib/date';
+import { addDays, diffDays } from '../src/lib/date';
 
 export interface StoreOptions {
   uid: string;
@@ -17,6 +17,8 @@ export interface StoreOptions {
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_RANGE_DAYS = 366;
+/** Longest event span looked back for (create_event allows up to 60 days). */
+const MAX_SPAN_DAYS = 62;
 
 export class PlockStore {
   private db: Firestore;
@@ -56,8 +58,12 @@ export class PlockStore {
     if (!YMD.test(from) || !YMD.test(to)) throw new Error('from/to는 YYYY-MM-DD 형식이어야 합니다.');
     if (to < from) throw new Error('to가 from보다 빠릅니다.');
     if (diffDays(from, to) > MAX_RANGE_DAYS) throw new Error(`한 번에 ${MAX_RANGE_DAYS}일까지만 조회할 수 있습니다.`);
-    // Firestore allows a range filter on one field: narrow by startDate, then check endDate here.
-    const [snap, cats] = await Promise.all([this.col('events').where('startDate', '<=', to).get(), this.categories()]);
+    // Firestore bills per document read, so bound the scan on both sides: an event overlapping the range
+    // starts at most MAX_SPAN_DAYS before `from` (multi-day events are capped at that length).
+    const [snap, cats] = await Promise.all([
+      this.col('events').where('startDate', '>=', addDays(from, -MAX_SPAN_DAYS)).where('startDate', '<=', to).get(),
+      this.categories(),
+    ]);
     const name = new Map(cats.map((c) => [c.id, c.name]));
     return snap.docs
       .map((d) => d.data() as PlannerEvent)
@@ -85,7 +91,7 @@ export class PlockStore {
     if (!YMD.test(input.date)) throw new Error('date는 YYYY-MM-DD 형식이어야 합니다.');
     const endDate = input.endDate ?? input.date;
     if (!YMD.test(endDate) || endDate < input.date) throw new Error('endDate는 date와 같거나 늦은 YYYY-MM-DD여야 합니다.');
-    if (diffDays(input.date, endDate) > 60) throw new Error('일정은 최대 60일까지 걸칠 수 있습니다.');
+    if (diffDays(input.date, endDate) > MAX_SPAN_DAYS - 2) throw new Error('일정은 최대 60일까지 걸칠 수 있습니다.');
     for (const [k, v] of [['startTime', input.startTime], ['endTime', input.endTime]] as const) {
       if (v !== undefined && !HM.test(v)) throw new Error(`${k}는 HH:mm(24시간) 형식이어야 합니다.`);
     }
